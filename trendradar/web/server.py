@@ -12,9 +12,10 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import json
 
 # 添加项目根目录到 Python 路径
 # trendradar/web/server.py -> trendradar/web -> trendradar -> hotnews (项目根目录)
@@ -29,6 +30,19 @@ from trendradar.storage import convert_crawl_results_to_news_data
 
 # 创建 FastAPI 应用
 app = FastAPI(title="TrendRadar News Viewer", version="1.0.0")
+
+# 自定义 JSONResponse 类，确保中文正确显示
+class UnicodeJSONResponse(Response):
+    media_type = "application/json"
+    
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+        ).encode("utf-8")
 
 # 配置模板目录
 templates_dir = Path(__file__).parent / "templates"
@@ -271,7 +285,7 @@ async def api_news(
         filter_mode=filter_mode
     )
     
-    return JSONResponse(content=data)
+    return UnicodeJSONResponse(content=data)
 
 
 @app.get("/api/categories")
@@ -279,7 +293,7 @@ async def api_categories():
     """API: 获取分类列表"""
     viewer_service, _ = get_services()
     categories = viewer_service.get_category_list()
-    return JSONResponse(content=categories)
+    return UnicodeJSONResponse(content=categories)
 
 
 @app.get("/api/filter/stats")
@@ -287,7 +301,7 @@ async def api_filter_stats():
     """API: 获取过滤统计"""
     viewer_service, _ = get_services()
     stats = viewer_service.get_filter_stats()
-    return JSONResponse(content=stats)
+    return UnicodeJSONResponse(content=stats)
 
 
 @app.post("/api/filter/mode")
@@ -295,7 +309,7 @@ async def api_set_filter_mode(mode: str):
     """API: 设置过滤模式"""
     viewer_service, _ = get_services()
     success = viewer_service.set_filter_mode(mode)
-    return JSONResponse(content={"success": success, "mode": mode})
+    return UnicodeJSONResponse(content={"success": success, "mode": mode})
 
 
 @app.get("/api/blacklist/keywords")
@@ -303,7 +317,7 @@ async def api_blacklist_keywords():
     """API: 获取黑名单关键词"""
     viewer_service, _ = get_services()
     keywords = viewer_service.get_blacklist_keywords()
-    return JSONResponse(content={"keywords": keywords})
+    return UnicodeJSONResponse(content={"keywords": keywords})
 
 
 @app.post("/api/blacklist/reload")
@@ -311,7 +325,7 @@ async def api_reload_blacklist():
     """API: 重新加载黑名单"""
     viewer_service, _ = get_services()
     count = viewer_service.reload_blacklist()
-    return JSONResponse(content={"success": True, "keywords_count": count})
+    return UnicodeJSONResponse(content={"success": True, "keywords_count": count})
 
 
 @app.get("/health")
@@ -331,7 +345,7 @@ async def api_start_scheduler(interval: int = Query(30, ge=5, le=1440)):
         interval: 获取间隔（分钟），默认30，范围5-1440
     """
     start_scheduler(interval)
-    return JSONResponse(content={
+    return UnicodeJSONResponse(content={
         "success": True,
         "message": f"定时任务已启动，间隔 {interval} 分钟",
         "interval_minutes": interval
@@ -342,7 +356,7 @@ async def api_start_scheduler(interval: int = Query(30, ge=5, le=1440)):
 async def api_stop_scheduler():
     """停止定时数据获取任务"""
     stop_scheduler()
-    return JSONResponse(content={
+    return UnicodeJSONResponse(content={
         "success": True,
         "message": "定时任务已停止"
     })
@@ -351,7 +365,7 @@ async def api_stop_scheduler():
 @app.get("/api/scheduler/status")
 async def api_scheduler_status():
     """获取定时任务状态"""
-    return JSONResponse(content={
+    return UnicodeJSONResponse(content={
         "running": _scheduler_running,
         "interval_minutes": _fetch_interval_minutes,
         "last_fetch_time": _last_fetch_time.isoformat() if _last_fetch_time else None
@@ -362,7 +376,7 @@ async def api_scheduler_status():
 async def api_fetch_now():
     """立即执行一次数据获取"""
     result = await fetch_news_data()
-    return JSONResponse(content=result)
+    return UnicodeJSONResponse(content=result)
 
 
 @app.on_event("startup")
