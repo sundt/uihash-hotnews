@@ -37,6 +37,8 @@ openspec/changes/*/
 !openspec/changes/harden-deployment-safety-rails/**
 !openspec/changes/add-real-sports-and-game-rankings/
 !openspec/changes/add-real-sports-and-game-rankings/**
+!openspec/changes/add-deploy-fast-paths/
+!openspec/changes/add-deploy-fast-paths/**
 
 # OpenSpec archive
 openspec/changes/archive/
