@@ -245,12 +245,17 @@
             min-width: 0;
         }
 
+        .news-title.nba-title {
+            font-size: 0.78rem;
+        }
+
         .news-subtitle {
             font-size: 0.72rem;
             line-height: 1.2;
             color: #6b7280;
             margin-top: 2px;
             margin-left: 24px;
+            text-align: right;
         }
 
         .news-item.preview .news-meta,
@@ -793,7 +798,7 @@
                                 <div class="news-item-content">
                                     <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
                                     <span class="news-index">{{ loop.index }}</span>
-                                    <div class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="{{ news.url or '' }}">
+                                    <div class="news-title {% if platform_id == 'nba-schedule' %}nba-title {% endif %}{% if news.is_cross_platform %}cross-platform{% endif %}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="{{ news.url or '' }}">
                                         {{ news.display_title or news.title }}
                                         {% if news.is_cross_platform %}
                                         <span class="cross-platform-badge" title="同时出现在: {{ news.cross_platforms|join(', ') }}">
@@ -1803,7 +1808,7 @@
                                 <div class="news-item-content">
                                     <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
                                     ${indexHtml}
-                                    <div class="news-title ${crossClass}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="${url}">
+                                    <div class="news-title ${platformId === 'nba-schedule' ? 'nba-title ' : ''}${crossClass}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="${url}">
                                         ${title}
                                         ${crossBadge}
                                     </div>

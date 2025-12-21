@@ -34,6 +34,19 @@ _CAIXIN_DATE_PREFIX_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\]\s+")
 _NBA_TIME_PREFIX_RE = re.compile(r"^\[(\d{2}-\d{2}\s+\d{2}:\d{2})\]\s+")
 
 
+def _parse_nba_meta_dt(meta: str) -> Optional[datetime]:
+    s = (meta or "").strip()
+    if not s:
+        return None
+    try:
+        # meta format is MM-DD HH:MM
+        dt = datetime.strptime(s, "%m-%d %H:%M")
+        # attach current year for stable ordering
+        return dt.replace(year=datetime.now().year)
+    except Exception:
+        return None
+
+
 # 平台分类定义（6类）
 PLATFORM_CATEGORIES = {
     "general": {
@@ -271,11 +284,14 @@ class NewsViewerService:
             meta = ""
             if platform_id == "caixin":
                 display_title = _CAIXIN_DATE_PREFIX_RE.sub("", display_title).strip()
-            elif platform_id == "nba-schedule":
+            _sort_dt = None
+            if platform_id == "nba-schedule":
                 m = _NBA_TIME_PREFIX_RE.match(display_title)
                 if m:
-                    meta = m.group(1)
+                    time_str = m.group(1)
+                    _sort_dt = _parse_nba_meta_dt(time_str)
                     display_title = _NBA_TIME_PREFIX_RE.sub("", display_title).strip()
+                    display_title = f"{display_title} · {time_str}"
 
             # 跨平台新闻去重：只在第一个出现的平台显示
             is_cross = title in cross_platform_news
@@ -298,7 +314,7 @@ class NewsViewerService:
             stable_id = generate_news_id(platform_id, title)
             
             # 添加跨平台信息和稳定ID
-            news_with_cross = {**news, "stable_id": stable_id, "display_title": display_title, "meta": meta}
+            news_with_cross = {**news, "stable_id": stable_id, "display_title": display_title, "meta": meta, "_sort_dt": _sort_dt}
             if is_cross:
                 other_platforms = [p for p in cross_platform_news[title] if p != platform_name]
                 if other_platforms:
@@ -340,6 +356,21 @@ class NewsViewerService:
                 if pid not in ordered:
                     ordered[pid] = pdata
             cat["platforms"] = ordered
+
+        # Sort nba-schedule items by match datetime desc (newest -> oldest)
+        sports = categories.get("sports")
+        if isinstance(sports, dict):
+            plats = sports.get("platforms")
+            if isinstance(plats, dict):
+                nba = plats.get("nba-schedule")
+                if isinstance(nba, dict) and isinstance(nba.get("news"), list):
+                    def _key(it: Dict) -> datetime:
+                        sd = it.get("_sort_dt")
+                        if isinstance(sd, datetime):
+                            return sd
+                        return datetime.min
+
+                    nba["news"] = sorted(list(nba["news"]), key=_key, reverse=True)
 
         # 按预定义顺序排序分类
         def get_order(cat_id):
