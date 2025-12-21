@@ -47,6 +47,7 @@ PLATFORM_CATEGORIES = {
         "platforms": [
             "wallstreetcn-hot", "wallstreetcn-quick", "cls-hot",
             "cls-telegraph", "gelonghui", "xueqiu", "jin10"
+            , "caixin"
         ]
     },
     "social": {

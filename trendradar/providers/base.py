@@ -40,5 +40,6 @@ class Provider(Protocol):
         ctx: ProviderFetchContext,
         platform_id: str,
         platform_name: str,
+        platform_config: Dict[str, Any],
     ) -> ProviderFetchResult:
         ...

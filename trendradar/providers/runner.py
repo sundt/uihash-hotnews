@@ -20,7 +20,7 @@ class ProviderIngestionConfig:
     """Configuration for running provider ingestion."""
 
     enabled: bool
-    platforms: List[Dict[str, str]]
+    platforms: List[Dict[str, Any]]
 
 
 def _parse_provider_ingestion_config(config: Dict[str, Any]) -> ProviderIngestionConfig:
@@ -33,16 +33,19 @@ def _parse_provider_ingestion_config(config: Dict[str, Any]) -> ProviderIngestio
     if not isinstance(platforms, list):
         platforms = []
 
-    cleaned: List[Dict[str, str]] = []
+    cleaned: List[Dict[str, Any]] = []
     for it in platforms:
         if not isinstance(it, dict):
             continue
         platform_id = str(it.get("id") or "").strip()
         platform_name = str(it.get("name") or platform_id).strip() if platform_id else ""
         provider_id = str(it.get("provider") or "").strip()
+        platform_config = it.get("config")
+        if not isinstance(platform_config, dict):
+            platform_config = {}
         if not platform_id or not provider_id:
             continue
-        cleaned.append({"id": platform_id, "name": platform_name, "provider": provider_id})
+        cleaned.append({"id": platform_id, "name": platform_name, "provider": provider_id, "config": platform_config})
 
     return ProviderIngestionConfig(enabled=enabled, platforms=cleaned)
 
@@ -119,6 +122,9 @@ def run_provider_ingestion_once(
         platform_id = p["id"]
         platform_name = p.get("name") or platform_id
         provider_id = p["provider"]
+        platform_config = p.get("config") if isinstance(p, dict) else {}
+        if not isinstance(platform_config, dict):
+            platform_config = {}
 
         started_at = time.time()
         status = "success"
@@ -130,6 +136,7 @@ def run_provider_ingestion_once(
                 ctx=ctx,
                 platform_id=platform_id,
                 platform_name=platform_name,
+                platform_config=platform_config,
             )
 
             normalized_items: List[NewsItem] = []
@@ -232,7 +239,16 @@ def build_default_registry() -> ProviderRegistry:
     registry is intentionally empty until those modules are added.
     """
 
-    return ProviderRegistry()
+    reg = ProviderRegistry()
+    try:
+        from .caixin import CaixinProvider
+
+        reg.register(CaixinProvider())
+    except Exception:
+        # provider optional; keep registry usable even if import fails
+        pass
+
+    return reg
 
 
 def _main() -> int:

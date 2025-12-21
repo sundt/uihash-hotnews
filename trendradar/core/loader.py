@@ -163,6 +163,17 @@ def _load_storage_config(config_data: Dict) -> Dict:
     }
 
 
+def _load_provider_ingestion_config(config_data: Dict) -> Dict[str, Any]:
+    raw = config_data.get("provider_ingestion", {})
+    if not isinstance(raw, dict):
+        raw = {}
+    # Keep the raw shape largely intact; runner performs its own validation.
+    return {
+        "enabled": bool(raw.get("enabled", False)),
+        "platforms": raw.get("platforms", []) if isinstance(raw.get("platforms"), list) else [],
+    }
+
+
 def _load_webhook_config(config_data: Dict) -> Dict:
     """加载 Webhook 配置"""
     notification = config_data.get("notification", {})
@@ -322,6 +333,9 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
     # 存储配置
     config["STORAGE"] = _load_storage_config(config_data)
+
+    # Provider ingestion (optional)
+    config["PROVIDER_INGESTION"] = _load_provider_ingestion_config(config_data)
 
     # Webhook 配置
     config.update(_load_webhook_config(config_data))

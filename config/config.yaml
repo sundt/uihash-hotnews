@@ -73,6 +73,19 @@ crawler:
   use_proxy: false # 是否启用代理，false 时为关闭
   default_proxy: "http://127.0.0.1:10801"
 
+provider_ingestion:
+  enabled: false
+  platforms:
+    - id: "caixin"
+      name: "财新网"
+      provider: "caixin"
+      config:
+        max_items: 30
+        timeout_s: 12
+        rss_urls: []
+        html_urls:
+          - "https://www.caixin.com/"
+
 # - daily（当日汇总模式）
 #   • 推送时机：按时推送(默认每小时推送一次)
 #   • 显示内容：当日所有匹配新闻 + 新增新闻区域
