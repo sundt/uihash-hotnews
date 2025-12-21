@@ -65,7 +65,21 @@ def _is_http_url(url: str) -> bool:
         return False
 
 
+def _extract_caixin_date_from_url(url: str) -> str:
+    try:
+        u = urlparse(url)
+        path = u.path or ""
+    except Exception:
+        path = ""
+
+    m = _CAIXIN_DATE_IN_URL_RE.search(path)
+    if not m:
+        return ""
+    return m.group(1)
+
+
 _CAIXIN_ARTICLE_PATH_RE = re.compile(r"/\d{4}-\d{2}-\d{2}/\d+\.html$")
+_CAIXIN_DATE_IN_URL_RE = re.compile(r"/(\d{4}-\d{2}-\d{2})/")
 
 
 def _looks_like_caixin_article_url(url: str) -> bool:
@@ -139,6 +153,10 @@ class CaixinProvider:
                 return
             if article_url_only and not _looks_like_caixin_article_url(url):
                 return
+
+            date_prefix = _extract_caixin_date_from_url(url)
+            if date_prefix:
+                title = f"[{date_prefix}] {title}"
             key = _stable_key(title, url)
             if key in content_keys:
                 return

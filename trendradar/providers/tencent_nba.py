@@ -100,6 +100,14 @@ def _parse_start_time(raw: str):
         return None
 
 
+def _format_match_time_for_title(raw: str) -> str:
+    dt = _parse_start_time(raw)
+    if dt is None:
+        return ""
+    # Keep it compact but include day so the list is understandable.
+    return dt.strftime("%m-%d %H:%M")
+
+
 @dataclass(frozen=True)
 class TencentNbaProvider:
     provider_id: str = "tencent_nba"
@@ -172,7 +180,9 @@ class TencentNbaProvider:
                 lg = (m.get("leftGoal") or "-").strip()
                 rg = (m.get("rightGoal") or "-").strip()
                 desc = (m.get("matchDesc") or "").strip()
-                title = f"{left} vs {right}  {lg}:{rg}  {desc}".strip()
+                mt = _format_match_time_for_title(m.get("startTime") or "")
+                prefix = f"[{mt}] " if mt else ""
+                title = f"{prefix}{left} vs {right}  {lg}:{rg}  {desc}".strip()
                 jump_url = (m.get("jumpUrl") or "").strip()
                 items.append(
                     NewsItem(
