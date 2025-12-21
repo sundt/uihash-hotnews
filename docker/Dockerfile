@@ -9,6 +9,7 @@ ENV SUPERCRONIC_VERSION=v0.2.39
 RUN set -ex && \
     apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
     case ${TARGETARCH} in \
     amd64) \
     export SUPERCRONIC_URL_PRIMARY=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
@@ -30,9 +31,12 @@ RUN set -ex && \
     python - <<'PY'
 import hashlib
 import os
+import shutil
+import subprocess
 import sys
 import time
 import urllib.request
+
 
 def download(url: str, out_path: str, timeout_s: int = 60) -> str:
     h = hashlib.sha1()
@@ -46,36 +50,47 @@ def download(url: str, out_path: str, timeout_s: int = 60) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+
 primary = os.environ["SUPERCRONIC_URL_PRIMARY"]
 mirror = os.environ["SUPERCRONIC_URL_MIRROR"]
-out_path = os.environ["SUPERCRONIC"]
+local_bin = os.environ["SUPERCRONIC"]
 expected = os.environ["SUPERCRONIC_SHA1SUM"].lower()
 
 urls = [primary, mirror]
+ok = False
 for attempt in range(1, 4):
     print(f"Download attempt {attempt}/3")
     for url in urls:
         print(f"Trying {url}")
         try:
-            sha1 = download(url, out_path, timeout_s=60)
+            sha1 = download(url, local_bin, timeout_s=60)
             if sha1.lower() != expected:
                 raise ValueError(f"sha1 mismatch: expected {expected}, got {sha1}")
-            print("Download successful")
-            sys.exit(0)
+            ok = True
+            break
         except Exception as e:
             print(f"Download failed: {e}", file=sys.stderr)
+    if ok:
+        break
     time.sleep(2)
 
-print("All download attempts failed", file=sys.stderr)
-sys.exit(1)
+if not ok:
+    print("All download attempts failed", file=sys.stderr)
+    sys.exit(1)
+
+os.chmod(local_bin, 0o755)
+target = f"/usr/local/bin/{local_bin}"
+shutil.move(local_bin, target)
+
+link = "/usr/local/bin/supercronic"
+try:
+    os.remove(link)
+except FileNotFoundError:
+    pass
+os.symlink(target, link)
+
+subprocess.run([link, "-version"], check=True)
 PY
-    && \
-    chmod +x "$SUPERCRONIC" && \
-    mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" && \
-    ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic && \
-    supercronic -version && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
