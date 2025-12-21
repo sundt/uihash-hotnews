@@ -11,12 +11,12 @@ RUN set -ex && \
     apt-get install -y --no-install-recommends curl ca-certificates && \
     case ${TARGETARCH} in \
     amd64) \
-    export SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
+    export SUPERCRONIC_URL_PRIMARY=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
     export SUPERCRONIC_SHA1SUM=c98bbf82c5f648aaac8708c182cc83046fe48423; \
     export SUPERCRONIC=supercronic-linux-amd64; \
     ;; \
     arm64) \
-    export SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-arm64; \
+    export SUPERCRONIC_URL_PRIMARY=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-arm64; \
     export SUPERCRONIC_SHA1SUM=5ef4ccc3d43f12d0f6c3763758bc37cc4e5af76e; \
     export SUPERCRONIC=supercronic-linux-arm64; \
     ;; \
@@ -25,21 +25,24 @@ RUN set -ex && \
     exit 1; \
     ;; \
     esac && \
-    echo "Downloading supercronic for ${TARGETARCH} from ${SUPERCRONIC_URL}" && \
+    export SUPERCRONIC_URL_MIRROR=https://ghproxy.com/${SUPERCRONIC_URL_PRIMARY} && \
+    echo "Downloading supercronic for ${TARGETARCH} from ${SUPERCRONIC_URL_PRIMARY} (mirror fallback: ${SUPERCRONIC_URL_MIRROR})" && \
     # 重试机制：最多3次，每次超时30秒
     for i in 1 2 3; do \
         echo "Download attempt $i/3"; \
-        if curl -fsSL --connect-timeout 30 --max-time 60 -o "$SUPERCRONIC" "$SUPERCRONIC_URL"; then \
-            echo "Download successful"; \
-            break; \
-        else \
-            echo "Download attempt $i failed"; \
-            if [ $i -eq 3 ]; then \
-                echo "All download attempts failed"; \
-                exit 1; \
+        for url in "$SUPERCRONIC_URL_PRIMARY" "$SUPERCRONIC_URL_MIRROR"; do \
+            echo "Trying $url"; \
+            if curl -fsSL --connect-timeout 30 --max-time 120 -o "$SUPERCRONIC" "$url"; then \
+                echo "Download successful"; \
+                break 2; \
             fi; \
-            sleep 2; \
+        done; \
+        echo "Download attempt $i failed"; \
+        if [ $i -eq 3 ]; then \
+            echo "All download attempts failed"; \
+            exit 1; \
         fi; \
+        sleep 2; \
     done && \
     echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - && \
     chmod +x "$SUPERCRONIC" && \
