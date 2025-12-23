@@ -416,16 +416,13 @@
             border-bottom: 1px solid #e5e7eb;
         }
 
-        .news-title a {
+        .news-title {
             color: inherit;
             text-decoration: none;
-            transition: color 0.2s;
-            pointer-events: none;
-            cursor: text;
-        }
-
-        .news-title {
             cursor: pointer;
+        }
+        .news-title:visited {
+            color: inherit;
         }
 
         /* 跨平台高亮 */
@@ -436,11 +433,11 @@
             padding-left: 8px;
         }
 
-        .news-title.cross-platform a {
+        .news-title.cross-platform:visited {
             color: var(--cross-platform-color);
         }
 
-        .news-title.cross-platform a:hover {
+        .news-title.cross-platform:hover {
             color: #ea580c;
         }
 

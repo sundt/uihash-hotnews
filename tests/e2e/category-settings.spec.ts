@@ -322,4 +322,33 @@ test.describe('Category Settings', () => {
     // Modal should close
     await expect(viewerPage.settingsModal).not.toBeVisible();
   });
+
+  test('should show NEW badge on first visit and hide after clicking', async ({ page }) => {
+    // Clear the dismissal flag to simulate first visit
+    await page.evaluate(() => {
+      localStorage.removeItem('category_settings_badge_dismissed');
+    });
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // NEW badge should be visible
+    const newBadge = page.locator('#categorySettingsNewBadge');
+    await expect(newBadge).toBeVisible();
+    await expect(newBadge).toHaveText('NEW');
+
+    // Click category settings button
+    await viewerPage.openCategorySettings();
+    
+    // NEW badge should be hidden
+    await expect(newBadge).not.toBeVisible();
+
+    // Close modal and reload
+    await viewerPage.cancelSettingsButton.click();
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // NEW badge should still be hidden (persisted in localStorage)
+    const newBadgeAfterReload = page.locator('#categorySettingsNewBadge');
+    await expect(newBadgeAfterReload).not.toBeVisible();
+  });
 });

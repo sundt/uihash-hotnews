@@ -4,6 +4,13 @@ import { ViewerPage } from './pages/viewer.page';
 test.describe('@prod Smoke', () => {
   test.describe.configure({ timeout: 60_000 });
 
+  test.beforeEach(() => {
+    const baseUrl = (process.env.BASE_URL || '').trim();
+    if (baseUrl !== 'https://hot.uihash.com') {
+      test.skip(true, 'prod smoke tests only run against production BASE_URL');
+    }
+  });
+
   test('index.html should be reachable', async ({ page }) => {
     const resp = await page.goto('/index.html');
     expect(resp?.ok()).toBeTruthy();

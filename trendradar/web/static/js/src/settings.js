@@ -156,6 +156,12 @@ export const settings = {
     },
 
     async openCategorySettings() {
+        // 隐藏 NEW 标记并记录到 localStorage
+        const newBadge = document.getElementById('categorySettingsNewBadge');
+        if (newBadge) {
+            newBadge.style.display = 'none';
+            localStorage.setItem('category_settings_badge_dismissed', 'true');
+        }
         if (!_defaultCategories || Object.keys(_defaultCategories).length === 0) {
             try {
                 const response = await fetch('/api/news');

@@ -246,6 +246,12 @@
 
             // 5. 初始化分页
             initPaging();
+
+            // 6. 检查栏目设置 NEW 标记是否应该隐藏
+            if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
+                const badge = document.getElementById('categorySettingsNewBadge');
+                if (badge) badge.style.display = 'none';
+            }
         });
 
         const CATEGORY_PAGE_SIZE = 20;
@@ -278,15 +284,7 @@
         }
 
         function refreshPlatform(btn) {
-            const card = btn.closest('.platform-card');
-            if (!card) return;
-            const items = card.querySelectorAll('.news-item');
-            const total = items.length;
-            if (total <= CATEGORY_PAGE_SIZE) return;
-            const current = parseInt(card.dataset.pageOffset || '0', 10);
-            const next = (current + CATEGORY_PAGE_SIZE >= total) ? 0 : (current + CATEGORY_PAGE_SIZE);
-            applyPagingToCard(card, next);
-            updateAllCounts();
+            return;
         }
 
         const FEATURE_BADGE_PREFIX = 'trendradar_feature_badge_v1:';
@@ -1203,6 +1201,12 @@
         }
 
         async function openCategorySettings() {
+            // 隐藏 NEW 标记并记录到 localStorage
+            const newBadge = document.getElementById('categorySettingsNewBadge');
+            if (newBadge) {
+                newBadge.style.display = 'none';
+                localStorage.setItem('category_settings_badge_dismissed', 'true');
+            }
             // 先从服务端获取完整数据，确保 _defaultCategories 正确初始化
             if (!_defaultCategories || Object.keys(_defaultCategories).length === 0) {
                 try {

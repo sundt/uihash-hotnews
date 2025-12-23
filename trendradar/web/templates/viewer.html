@@ -7,8 +7,8 @@
     <!-- 资源预加载提示 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v=20251223_1444" as="style">
-    <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1444" as="script">
+    <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v=20251223_1841" as="style">
+    <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1841" as="script">
     <!-- 早期隐藏脚本：在 DOM 解析前检测用户配置，防止栏目闪烁 -->
     <script>
     (function(){try{var r=localStorage.getItem('trendradar_categories_config');if(r){var c=JSON.parse(r);if((c.customCategories&&c.customCategories.length>0)||(c.hiddenDefaultCategories&&c.hiddenDefaultCategories.length>0)){document.write('<style id="early-hide">.category-tabs,.tab-content-area{display:none!important}</style>');}}}catch(e){}})();
@@ -36,7 +36,7 @@
         @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="{{ static_prefix }}/css/viewer.css?v=20251223_1444" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer.css?v=20251223_1841" rel="stylesheet">
 </head>
 <body>
     <div class="main-container">
@@ -56,7 +56,7 @@
                     </span>
                 </div>
                 <button class="category-settings-btn" onclick="openCategorySettings()">
-                    ⚙️ 栏目设置
+                    ⚙️ 栏目设置 <span class="new-badge" id="categorySettingsNewBadge">NEW</span>
                 </button>
                 <button class="show-read-btn" id="showReadBtn" onclick="toggleShowRead()">
                     👁 已读: <span id="readCount">0</span>
@@ -193,6 +193,6 @@
         </div>
     </div>
 
-    <script src="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1444"></script>
+    <script src="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1841"></script>
 </body>
 </html>

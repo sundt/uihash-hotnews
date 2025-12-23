@@ -187,9 +187,6 @@
                                     📱 ${platform.name}
                                     ${newPlatformBadge}
                                 </div>
-                                <button class="platform-refresh-btn" type="button" onclick="refreshPlatform(this)" title="仅刷新本平台，换新（20条）">
-                                    <span>换新</span>
-                                </button>
                             </div>
                             <ul class="news-list">${newsHtml}</ul>
                         </div>

@@ -7,6 +7,21 @@ import { TR, ready } from './core.js';
 
 // 初始化：检查用户配置并决定是否需要刷新数据
 ready(function() {
+    // 检查栏目设置 NEW 标记是否应该隐藏
+    if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
+        const badge = document.getElementById('categorySettingsNewBadge');
+        if (badge) badge.style.display = 'none';
+    }
+
+    const settingsBtn = document.querySelector('.category-settings-btn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            const badge = document.getElementById('categorySettingsNewBadge');
+            if (badge) badge.style.display = 'none';
+            localStorage.setItem('category_settings_badge_dismissed', 'true');
+        });
+    }
+
     // 检查用户是否有自定义配置
     const config = TR.settings.getCategoryConfig();
     const hasCustomConfig = config && (
