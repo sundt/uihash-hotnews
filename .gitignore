@@ -74,6 +74,7 @@ openspec/changes/archive/
 # Temporary files
 *.tmp
 *.bak
+release.tar.gz
 
 # Node.js / Playwright
 node_modules/

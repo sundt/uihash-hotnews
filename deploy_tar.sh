@@ -159,6 +159,13 @@ log_info "Uploading package -> ${REMOTE}:${PACKAGE_REMOTE}"
 scp "-P" "${SSH_PORT}" "${PACKAGE_LOCAL}" "${REMOTE}:${PACKAGE_REMOTE}"
 
 log_info "Deploying on remote host"
+
+# NOTE: ssh concatenates the remote command into a single string, which can drop empty
+# arguments. To avoid positional parameter shifting, we pass explicit placeholders
+# for optional args and decode them on the remote side.
+DOCKER_COMPOSE_SERVICE_ARG="${DOCKER_COMPOSE_SERVICE:-__EMPTY__}"
+CUSTOM_RESTART_CMD_ARG="${CUSTOM_RESTART_CMD:-__EMPTY__}"
+
 ssh "${SSH_OPTS[@]}" "${REMOTE}" bash -s -- \
   "${DEPLOY_PATH}" \
   "${SERVICE_NAME}" \
@@ -172,8 +179,8 @@ ssh "${SSH_OPTS[@]}" "${REMOTE}" bash -s -- \
   "${HEALTHCHECK_DELAY_SECONDS}" \
   "${RESTART_MODE}" \
   "${DOCKER_COMPOSE_DIR}" \
-  "${DOCKER_COMPOSE_SERVICE}" \
-  "${CUSTOM_RESTART_CMD}" \
+  "${DOCKER_COMPOSE_SERVICE_ARG}" \
+  "${CUSTOM_RESTART_CMD_ARG}" \
   "${DOCKER_BUILD_ON_DEPLOY}" \
   "${DOCKER_RECREATE_ON_DEPLOY}" \
   "${DOCKER_BUILD_COMPOSE_FILE}" \
@@ -198,6 +205,13 @@ DOCKER_BUILD_ON_DEPLOY="${15:-false}"
 DOCKER_RECREATE_ON_DEPLOY="${16:-false}"
 DOCKER_BUILD_COMPOSE_FILE="${17:-docker-compose-build.yml}"
 DOCKER_RUN_COMPOSE_FILE="${18:-docker-compose.yml}"
+
+if [ "${DOCKER_COMPOSE_SERVICE}" = "__EMPTY__" ]; then
+  DOCKER_COMPOSE_SERVICE=""
+fi
+if [ "${CUSTOM_RESTART_CMD}" = "__EMPTY__" ]; then
+  CUSTOM_RESTART_CMD=""
+fi
 
 COLOR_RESET="\033[0m"
 COLOR_GREEN="\033[32m"
