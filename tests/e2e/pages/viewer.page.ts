@@ -22,7 +22,7 @@ export class ViewerPage {
     this.page = page;
     this.categoryTabs = page.locator('.category-tabs .category-tab');
     this.platformCards = page.locator('.platform-card');
-    this.categorySettingsButton = page.locator('.category-settings-btn');
+    this.categorySettingsButton = page.locator('button.category-settings-btn:has-text("栏目设置")');
     this.settingsModal = page.locator('#categorySettingsModal');
     this.categoryListWrapper = page.locator('#categoryListWrapper');
     this.categoryList = page.locator('#categoryList');

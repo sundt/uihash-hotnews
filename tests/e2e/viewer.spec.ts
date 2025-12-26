@@ -43,10 +43,18 @@ test.describe('News Viewer Page', () => {
       const card = page.locator('#tab-sports .platform-card[data-platform="nba-schedule"]');
       if ((await card.count()) === 0) return;
 
+      // Lazy load will start when sentinel becomes visible
+      const sentinel = card.locator('.news-load-sentinel');
+      if ((await sentinel.count()) === 0) return;
+      await sentinel.scrollIntoViewIfNeeded();
+
       const total = card.locator('.news-item');
       await expect
         .poll(async () => await total.count())
-        .toBeGreaterThan(20);
+        .toBeGreaterThan(0);
+
+      // Scroll again to trigger another page load so visible items can exceed 20
+      await sentinel.scrollIntoViewIfNeeded();
 
       const visible = card.locator('.news-item:not(.paged-hidden)');
       await expect
@@ -166,6 +174,117 @@ test.describe('News Viewer Page', () => {
     });
   });
 
+});
+
+test.describe('Platform Title Horizontal Scroll', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 820 });
+    const path = process.env.VIEWER_PATH || '/';
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).toHaveClass(/categories-ready/, { timeout: 15000 });
+    await expect(page.locator('.category-tabs .category-tab').first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test('dragging on platform title area scrolls the platform grid horizontally', async ({ page }) => {
+    const grid = page.locator('.tab-pane.active .platform-grid');
+    await expect(grid).toBeVisible();
+
+    const title = page.locator('.tab-pane.active .platform-card').first().locator('.platform-name');
+    await expect(title).toBeVisible();
+
+    // Ensure there is room to scroll; shrink viewport typically guarantees this.
+    await expect
+      .poll(async () => {
+        return await grid.evaluate((el) => {
+          const g = el as HTMLElement;
+          return (g.scrollWidth || 0) > (g.clientWidth || 0) + 1;
+        });
+      })
+      .toBeTruthy();
+
+    const before = await grid.evaluate((el) => (el as HTMLElement).scrollLeft || 0);
+
+    const box = await title.boundingBox();
+    if (!box) throw new Error('no title bounding box');
+
+    // Drag left to scroll right.
+    const startX = box.x + box.width * 0.6;
+    const startY = box.y + box.height * 0.5;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX - 160, startY, { steps: 10 });
+    await page.mouse.up();
+
+    await expect
+      .poll(async () => {
+        const after = await grid.evaluate((el) => (el as HTMLElement).scrollLeft || 0);
+        return after;
+      })
+      .toBeGreaterThan(before);
+  });
+
+  test('Shift + wheel on platform title area scrolls the platform grid horizontally', async ({ page }) => {
+    const grid = page.locator('.tab-pane.active .platform-grid');
+    await expect(grid).toBeVisible();
+
+    const title = page.locator('.tab-pane.active .platform-card').first().locator('.platform-name');
+    await expect(title).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        return await grid.evaluate((el) => {
+          const g = el as HTMLElement;
+          return (g.scrollWidth || 0) > (g.clientWidth || 0) + 1;
+        });
+      })
+      .toBeTruthy();
+
+    const before = await grid.evaluate((el) => (el as HTMLElement).scrollLeft || 0);
+
+    const box = await title.boundingBox();
+    if (!box) throw new Error('no title bounding box');
+    const x = box.x + box.width * 0.6;
+    const y = box.y + box.height * 0.5;
+
+    await page.mouse.move(x, y);
+    await page.keyboard.down('Shift');
+    await page.mouse.wheel(0, 200);
+    await page.keyboard.up('Shift');
+
+    await expect
+      .poll(async () => {
+        const after = await grid.evaluate((el) => (el as HTMLElement).scrollLeft || 0);
+        return after;
+      })
+      .toBeGreaterThan(before);
+  });
+
+  test('click on platform title area is not blocked when not dragging', async ({ page }) => {
+    const title = page.locator('.tab-pane.active .platform-card').first().locator('.platform-name');
+    await expect(title).toBeVisible();
+
+    await page.evaluate(() => {
+      // @ts-ignore
+      window.__pw_title_clicks = 0;
+      const el = document.querySelector('.tab-pane.active .platform-card .platform-name');
+      if (!el) throw new Error('no platform-name');
+      el.addEventListener('click', () => {
+        // @ts-ignore
+        window.__pw_title_clicks += 1;
+      });
+    });
+
+    await title.click();
+
+    await expect
+      .poll(async () => {
+        return await page.evaluate(() => {
+          // @ts-ignore
+          return window.__pw_title_clicks || 0;
+        });
+      })
+      .toBeGreaterThan(0);
+  });
 });
 
 test.describe('Per-Category Filter', () => {

@@ -3,25 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="baidu-site-verification" content="codeva-FMb8nsTNbx" />
     <title>Hotnews-热点新闻</title>
     <!-- 资源预加载提示 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v=20251223_1841" as="style">
-    <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1841" as="script">
+    <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
+    <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}" as="script">
     <!-- 早期隐藏脚本：在 DOM 解析前检测用户配置，防止栏目闪烁 -->
     <script>
     (function(){try{var r=localStorage.getItem('trendradar_categories_config');if(r){var c=JSON.parse(r);if((c.customCategories&&c.customCategories.length>0)||(c.hiddenDefaultCategories&&c.hiddenDefaultCategories.length>0)){document.write('<style id="early-hide">.category-tabs,.tab-content-area{display:none!important}</style>');}}}catch(e){}})();
     </script>
-    <!-- 百度统计 -->
-    <script>
-    var _hmt = _hmt || [];
-    (function() {
-      var hm = document.createElement("script");
-      hm.src = "https://hm.baidu.com/hm.js?66fb2effb4714e3c3f0b0c0053b8dc83";
-      var s = document.getElementsByTagName("script")[0]; 
-      s.parentNode.insertBefore(hm, s);
-    })();
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "uqyzcxxgdk");
     </script>
     <!-- 关键 CSS 内联（骨架屏样式，防止 FOUC） -->
     <style>
@@ -36,7 +34,7 @@
         @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="{{ static_prefix }}/css/viewer.css?v=20251223_1841" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
 </head>
 <body>
     <div class="main-container">
@@ -51,12 +49,12 @@
                 <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
                     <span class="stat-label">更新</span>
                     <span class="stat-value" id="updatedAt">{{ data.updated_at }}</span>
-                    <span class="online-chips" id="onlineChips" title="实时在线：按最近活跃时间统计">
-                        <span class="online-chip">在线 <b id="online5m">-</b></span>
-                    </span>
                 </div>
                 <button class="category-settings-btn" onclick="openCategorySettings()">
                     ⚙️ 栏目设置 <span class="new-badge" id="categorySettingsNewBadge">NEW</span>
+                </button>
+                <button class="category-settings-btn" onclick="openRssSubscriptionModal()">
+                    🧩 RSS订阅 <span class="new-badge" id="rssSubscriptionNewBadge">NEW</span>
                 </button>
                 <button class="show-read-btn" id="showReadBtn" onclick="toggleShowRead()">
                     👁 已读: <span id="readCount">0</span>
@@ -64,14 +62,11 @@
                 <button class="filter-toggle-btn" type="button" onclick="window.open('https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe', '_blank')">
                     💡 建议
                 </button>
+                <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="🔍 搜索新闻..." onkeyup="searchNews()" style="flex: 1; min-width: 160px; max-width: 320px; font-size: 0.8rem; padding: 4px 8px;">
             </div>
 
             <!-- 过滤面板 -->
             <div class="filter-panel" id="filterPanel" style="display:none;"></div>
-
-            <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
-                <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="🔍 搜索新闻..." onkeyup="searchNews()" style="flex: 1; font-size: 0.8rem; padding: 4px 8px;">
-            </div>
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
@@ -83,7 +78,9 @@
             {% for cat_id, category in data.categories.items() %}
             <div class="category-tab {% if loop.first %}active{% endif %}" 
                  data-category="{{ cat_id }}"
+                 draggable="false"
                  onclick="switchTab('{{ cat_id }}')">
+                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">{{ category.icon }}</div>
                 <div class="category-tab-name">{{ category.name }}{% if category.is_new %}<span class="new-badge new-badge-category" data-category="{{ cat_id }}">NEW</span>{% endif %}{% if cat_id == 'sports' %}<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>{% endif %}</div>
             </div>
@@ -93,106 +90,54 @@
         <!-- Content -->
         <div class="tab-content-area">
             {% for cat_id, category in data.categories.items() %}
+            {% set is_active_category = loop.first %}
             <div class="tab-pane {% if loop.first %}active{% endif %}" id="tab-{{ cat_id }}">
                 <div class="platform-grid">
                     {% for platform_id, platform in category.platforms.items() %}
-                    <div class="platform-card" data-platform="{{ platform_id }}">
+                    <div class="platform-card" data-platform="{{ platform_id }}" data-total-count="{{ platform.news|length }}" data-loaded-count="{% if is_active_category %}{{ [platform.news|length, 20]|min }}{% else %}0{% endif %}" draggable="false">
                         <div class="platform-header">
+                            <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
                             <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('{{ platform_id }}')">
                                 📱 {{ platform.name }}
                                 {% if platform.is_new %}<span class="new-badge new-badge-platform" data-platform="{{ platform_id }}">NEW</span>{% endif %}
                             </div>
+                            <div class="platform-header-actions"></div>
                         </div>
                         <ul class="news-list">
-                            {% for news in platform.news %}
-                            <li class="news-item{% if loop.index > 20 %} paged-hidden{% endif %}" data-news-id="{{ news.stable_id }}" data-news-title="{{ news.display_title or news.title }}">
-                                <div class="news-item-content">
-                                    <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
-                                    <span class="news-index">{{ loop.index }}</span>
-                                    <a class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
-                                        {{ news.display_title or news.title }}
-                                        {% if news.is_cross_platform %}
-                                        <span class="cross-platform-badge" title="同时出现在: {{ news.cross_platforms|join(', ') }}">
-                                            🔥 {{ news.cross_platform_count }}
-                                        </span>
-                                        {% endif %}
-                                    </a>
-                                </div>
-                                {% if news.meta %}<div class="news-subtitle">{{ news.meta }}</div>{% endif %}
-                            </li>
-                            {% endfor %}
+                            {% if is_active_category %}
+                                {% for news in platform.news[:20] %}
+                                <li class="news-item" data-news-id="{{ news.stable_id }}" data-news-title="{{ news.display_title or news.title }}">
+                                    <div class="news-item-content">
+                                        <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
+                                        <span class="news-index">{{ loop.index }}</span>
+                                        <a class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                                            {{ news.display_title or news.title }}
+                                            {% if news.is_cross_platform %}
+                                            <span class="cross-platform-badge" title="同时出现在: {{ news.cross_platforms|join(', ') }}">
+                                                🔥 {{ news.cross_platform_count }}
+                                            </span>
+                                            {% endif %}
+                                        </a>
+                                    </div>
+                                    {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{ news.meta }}</div>{% endif %}
+                                </li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="news-placeholder" aria-hidden="true">待加载...</li>
+                            {% endif %}
                         </ul>
+                        <div class="news-load-sentinel" aria-hidden="true"></div>
                     </div>
                     {% endfor %}
                 </div>
+                <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
             </div>
             {% endfor %}
         </div>
     </div>
 
-    <!-- 栏目设置弹窗 -->
-    <div class="settings-modal-overlay" id="categorySettingsModal" onclick="closeCategorySettingsOnOverlay(event)">
-        <div class="settings-modal" onclick="event.stopPropagation()">
-            <div class="settings-modal-header">
-                <span class="settings-modal-title">⚙️ 栏目设置</span>
-                <button class="settings-modal-close" onclick="closeCategorySettings()">&times;</button>
-            </div>
-            <div class="settings-modal-body">
-                <div class="settings-section">
-                    <button class="add-category-btn" onclick="showAddCategoryPanel()">+ 新增自定义栏目</button>
-                </div>
-                <div class="category-edit-panel" id="categoryEditPanel">
-                    <div class="edit-field">
-                        <label>栏目名称</label>
-                        <input type="text" id="editCategoryName" placeholder="输入栏目名称">
-                    </div>
-                    <div class="edit-field">
-                        <label>选择平台 <span style="font-weight:normal;color:#6b7280;">(拖拽排序)</span></label>
-                        <div class="platform-select-toolbar">
-                            <input class="platform-select-search" type="text" id="platformSearchInput" placeholder="搜索平台..." oninput="setPlatformSearchQuery(this.value)">
-                            <div class="platform-select-actions">
-                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('all')">全选</button>
-                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('none')">全不选</button>
-                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('clear')">清空</button>
-                            </div>
-                        </div>
-                        <div class="platform-select-list" id="platformSelectList"></div>
-                    </div>
-                    <div class="edit-field">
-                        <label>关键词过滤</label>
-                        <div class="filter-input-row">
-                            <label class="filter-mode-toggle" title="关键词模式：过滤=隐藏命中关键词；显示=只显示命中关键词">
-                                <input type="checkbox" id="categoryFilterModeToggle" onchange="handleCategoryFilterModeToggle(this)">
-                                <span class="filter-mode-pill">
-                                    <span class="filter-mode-thumb"></span>
-                                    <span class="filter-mode-off">过滤</span>
-                                    <span class="filter-mode-on">显示</span>
-                                </span>
-                            </label>
-                            <input type="text" class="filter-input" id="categoryFilterInput" placeholder="输入关键词，回车添加..." onkeypress="handleCategoryFilterKeypress(event)">
-                            <button class="filter-add-btn" onclick="addCategoryFilterKeyword()">+ 添加</button>
-                        </div>
-                        <div class="filter-tags" id="categoryFilterTags"></div>
-                    </div>
-                </div>
+    {% include "_viewer_modals.html" %}
 
-                <div class="category-list-controls">
-                    <div class="settings-section-title" style="margin:0;">
-                        <button class="platform-select-action-btn" id="categoryListToggleBtn" type="button" onclick="toggleCategoryListCollapseInSettings()">收起栏目列表</button>
-                        <span style="font-weight:normal;color:#6b7280;font-size:0.75rem;">(拖拽排序)</span>
-                    </div>
-                </div>
-                <div class="category-list-wrapper collapsed" id="categoryListWrapper">
-                    <div class="category-list" id="categoryList"></div>
-                </div>
-            </div>
-            <div class="settings-modal-footer">
-                <button class="settings-btn-secondary" onclick="cancelCategorySettings()">取消</button>
-                <button class="settings-btn-primary" onclick="saveCategorySettings()">保存</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="{{ static_prefix }}/js/viewer.bundle.js?v=20251223_1841"></script>
+    <script src="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}"></script>
 </body>
 </html>

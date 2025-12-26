@@ -65,6 +65,9 @@ export const data = {
         if (!tabsEl || !contentEl) return;
 
         const categories = TR.settings.applyCategoryConfigToData(data?.categories || {});
+        const preferredActiveTab = (state && typeof state.activeTab === 'string') ? state.activeTab : null;
+        const firstTabId = Object.keys(categories || {})[0] || null;
+        const activeTabId = preferredActiveTab || firstTabId;
 
         const tabsHtml = Object.entries(categories).map(([catId, cat]) => {
             const icon = escapeHtml(cat?.icon || '');
@@ -73,26 +76,31 @@ export const data = {
             const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
             const badge = `${badgeCategory}${badgeSports}`;
             return `
-            <div class="category-tab" data-category="${escapeHtml(catId)}" onclick="switchTab('${escapeHtml(catId)}')">
+            <div class="category-tab" data-category="${escapeHtml(catId)}" draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
+                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">${icon}</div>
                 <div class="category-tab-name">${name}${badge}</div>
             </div>`;
         }).join('');
 
         const contentHtml = Object.entries(categories).map(([catId, cat]) => {
+            const isActiveCategory = !!activeTabId && String(catId) === String(activeTabId);
             const platforms = cat?.platforms || {};
             const platformCards = Object.entries(platforms).map(([platformId, platform]) => {
                 const platformName = escapeHtml(platform?.name || platformId);
                 const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
                 const news = Array.isArray(platform?.news) ? platform.news : [];
+                const totalCount = news.length;
+                const initialCount = isActiveCategory ? Math.min(totalCount, CATEGORY_PAGE_SIZE) : 0;
                 const pagingOffset = (platformId && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[platformId])) ? state.pagingOffsets[platformId] : 0;
-                const filteredNews = news;
+                const filteredNews = news.slice(0, initialCount);
 
                 const newsItemsHtml = filteredNews.map((n, idx) => {
                     const stableId = escapeHtml(n?.stable_id || '');
                     const title = escapeHtml(n?.display_title || n?.title || '');
                     const url = escapeHtml(n?.url || '');
                     const meta = escapeHtml(n?.meta || '');
+                    const isRssPlatform = String(platformId || '').startsWith('rss-');
                     const isCross = !!n?.is_cross_platform;
                     const crossPlatforms = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
                     const crossTitle = escapeHtml(crossPlatforms.join(', '));
@@ -101,7 +109,7 @@ export const data = {
                     const crossClass = isCross ? 'cross-platform' : '';
                     const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
                     const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
-                    const metaHtml = meta ? `<div class="news-subtitle">${meta}</div>` : '';
+                    const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
                     const safeHref = url || '#';
                     return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
@@ -115,18 +123,21 @@ export const data = {
                             </div>
                             ${metaHtml}
                         </li>`;
-                }).join('');
+                }).join('') || (!isActiveCategory ? '<li class="news-placeholder" aria-hidden="true">待加载...</li>' : '');
 
                 const headerButtons = '';
+                const dragHandle = `<span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>`;
 
                 return `
-                <div class="platform-card" data-platform="${escapeHtml(platformId)}">
+                <div class="platform-card" data-platform="${escapeHtml(platformId)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" draggable="false">
                     <div class="platform-header">
+                        ${dragHandle}
                         <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('${escapeHtml(platformId)}')">📱 ${platformName}${platformBadge}</div>
-                        ${headerButtons}
+                        <div class="platform-header-actions">${headerButtons}</div>
                     </div>
                     <ul class="news-list">${newsItemsHtml}
                     </ul>
+                    <div class="news-load-sentinel" aria-hidden="true"></div>
                 </div>`;
             }).join('');
 
@@ -134,6 +145,7 @@ export const data = {
             <div class="tab-pane" id="tab-${escapeHtml(catId)}">
                 <div class="platform-grid">${platformCards}
                 </div>
+                <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
             </div>`;
         }).join('');
 
@@ -205,6 +217,14 @@ export const data = {
         document.body.classList.add('categories-ready');
 
         TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
+
+        try {
+            if (TR.infiniteScroll && typeof TR.infiniteScroll.attach === 'function') {
+                TR.infiniteScroll.attach();
+            }
+        } catch (e) {
+            // ignore
+        }
     },
 
     async refreshViewerData(opts = {}) {
@@ -223,8 +243,46 @@ export const data = {
             const state = this.snapshotViewerState();
             state.preserveScroll = preserveScroll;
             const response = await fetch('/api/news');
-            const data = await response.json();
-            this.renderViewerFromData(data, state);
+            const baseData = await response.json();
+
+            let mergedData = baseData;
+            try {
+                const subsAll = TR.subscription?.getSubscriptions ? TR.subscription.getSubscriptions() : [];
+                if (Array.isArray(subsAll) && subsAll.length > 0) {
+                    const cap = 25;
+                    const subs = subsAll.slice(0, cap);
+                    const ids = subs.map((s) => String(s?.source_id || s?.rss_source_id || '').trim()).filter(Boolean);
+                    if (ids.length > 0) {
+                        try {
+                            fetch('/api/rss-sources/warmup?wait_ms=0', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ source_ids: ids, priority: 'normal' })
+                            }).catch(() => {});
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    const rssResp = await fetch('/api/subscriptions/rss-news', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ subscriptions: subs })
+                    });
+                    const rssData = await rssResp.json();
+                    if (rssResp.ok && rssData && typeof rssData === 'object') {
+                        const baseCategories = (mergedData && typeof mergedData === 'object' && mergedData.categories) ? mergedData.categories : {};
+                        const rssCategories = (rssData && typeof rssData === 'object' && rssData.categories) ? rssData.categories : {};
+                        mergedData = {
+                            ...mergedData,
+                            categories: { ...baseCategories, ...rssCategories },
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error('rss merge error:', e);
+            }
+
+            this.renderViewerFromData(mergedData, state);
             if (state.preserveScroll) {
                 window.scrollTo({ top: state.scrollY, behavior: 'auto' });
                 TR.scroll.restoreActiveTabPlatformGridScroll(state);

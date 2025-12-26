@@ -14,7 +14,6 @@ import './search.js';
 import './scroll.js';
 import './badges.js';
 import './paging.js';
-import './online.js';
 
 // 依赖基础模块的功能
 import './read-state.js';
@@ -22,6 +21,11 @@ import './settings.js';
 import './filter.js';
 import './tabs.js';
 import './data.js';
+import './infinite-scroll.js';
+import './platform-reorder.js';
+import './category-tab-reorder.js';
+import './subscription.js';
+import './title-drag-scroll.js';
 
 // 初始化模块（必须最后导入）
 import './init.js';

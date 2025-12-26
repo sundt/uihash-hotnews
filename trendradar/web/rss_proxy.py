@@ -1,0 +1,809 @@
+import asyncio
+import json
+import os
+import socket
+import time
+import ipaddress
+import logging
+from collections import deque
+from threading import Lock, Semaphore
+from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin, urlparse
+
+import requests
+from fastapi import APIRouter, Body, Query, Request
+from fastapi.responses import JSONResponse, Response
+
+from mcp_server.services.cache_service import get_cache
+from trendradar.web.db_online import get_online_db_conn
+
+
+router = APIRouter()
+
+logger = logging.getLogger(__name__)
+
+
+def _rss_http_timeout_s() -> float:
+    try:
+        v = float(os.environ.get("TREND_RADAR_RSS_HTTP_TIMEOUT_S", "15"))
+    except Exception:
+        v = 15.0
+    if not (v > 0):
+        v = 15.0
+    return float(max(1.0, min(60.0, v)))
+
+
+def _rss_http_timeouts() -> Any:
+    try:
+        connect_raw = os.environ.get("TREND_RADAR_RSS_HTTP_CONNECT_TIMEOUT_S", "").strip()
+        read_raw = os.environ.get("TREND_RADAR_RSS_HTTP_READ_TIMEOUT_S", "").strip()
+    except Exception:
+        connect_raw = ""
+        read_raw = ""
+
+    connect_s: Optional[float] = None
+    read_s: Optional[float] = None
+    try:
+        if connect_raw:
+            connect_s = float(connect_raw)
+    except Exception:
+        connect_s = None
+    try:
+        if read_raw:
+            read_s = float(read_raw)
+    except Exception:
+        read_s = None
+
+    if connect_s is None and read_s is None:
+        legacy = _rss_http_timeout_s()
+        return (legacy, legacy)
+
+    if connect_s is None:
+        connect_s = 3.0
+    if read_s is None:
+        read_s = 10.0
+
+    connect_s = float(max(1.0, min(60.0, connect_s)))
+    read_s = float(max(1.0, min(60.0, read_s)))
+    return (connect_s, read_s)
+
+
+def _rss_user_agent() -> str:
+    try:
+        ua = (os.environ.get("TREND_RADAR_RSS_USER_AGENT", "") or "").strip()
+    except Exception:
+        ua = ""
+    return ua or "TrendRadar/1.0"
+
+
+def _rss_accept_language() -> str:
+    try:
+        v = (os.environ.get("TREND_RADAR_RSS_ACCEPT_LANGUAGE", "") or "").strip()
+    except Exception:
+        v = ""
+    return v or "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+
+
+def _rss_default_headers() -> Dict[str, str]:
+    return {
+        "User-Agent": _rss_user_agent(),
+        "Accept": "application/atom+xml, application/rss+xml, application/xml, text/xml, application/json, */*",
+        "Accept-Language": _rss_accept_language(),
+    }
+
+
+class UnicodeJSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+
+def _md5_hex(s: str) -> str:
+    import hashlib
+
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
+
+
+def is_blocked_ip(ip: Any) -> bool:
+    return bool(
+        getattr(ip, "is_private", False)
+        or getattr(ip, "is_loopback", False)
+        or getattr(ip, "is_link_local", False)
+        or getattr(ip, "is_multicast", False)
+        or getattr(ip, "is_reserved", False)
+        or getattr(ip, "is_unspecified", False)
+    )
+
+
+def resolve_and_validate_host(host: str) -> None:
+    host = (host or "").strip().lower()
+    if not host:
+        raise ValueError("Empty host")
+    if host in {"localhost"}:
+        raise ValueError("Blocked host")
+
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+
+    if ip is not None:
+        if is_blocked_ip(ip):
+            raise ValueError("Blocked IP")
+        return
+
+    infos = socket.getaddrinfo(host, None)
+    if not infos:
+        raise ValueError("Host resolve failed")
+    for info in infos:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        ip_str = sockaddr[0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if is_blocked_ip(ip_obj):
+            raise ValueError("Blocked resolved IP")
+
+
+def validate_http_url(raw_url: str) -> str:
+    u = (raw_url or "").strip()
+    if not u:
+        raise ValueError("Missing url")
+    parsed = urlparse(u)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Invalid url scheme")
+    if not parsed.netloc:
+        raise ValueError("Invalid url")
+    if parsed.username or parsed.password:
+        raise ValueError("Invalid url")
+    resolve_and_validate_host(parsed.hostname or "")
+    return u
+
+
+def _strip_xml_tag(tag: str) -> str:
+    if not tag:
+        return ""
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    return tag
+
+
+def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
+    ct = (content_type or "").lower()
+    text = body.decode("utf-8", errors="replace")
+    if "json" in ct:
+        payload = json.loads(text)
+        if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            feed_title = str(payload.get("title") or "")
+            entries = []
+            for it in payload.get("items") or []:
+                if not isinstance(it, dict):
+                    continue
+                url = it.get("url") or it.get("external_url")
+                title = it.get("title") or url
+                published = it.get("date_published") or it.get("date_modified")
+                entries.append({"title": title, "link": url, "published": published})
+            return {"format": "json", "feed": {"title": feed_title}, "entries": entries}
+        return {"format": "json", "payload": payload}
+
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(body)
+    root_tag = _strip_xml_tag(root.tag).lower()
+
+    if root_tag == "rss":
+        channel = None
+        for child in root:
+            if _strip_xml_tag(child.tag).lower() == "channel":
+                channel = child
+                break
+        if channel is None:
+            return {"format": "xml", "feed": {"title": ""}, "entries": []}
+
+        feed_title = ""
+        for child in channel:
+            if _strip_xml_tag(child.tag).lower() == "title":
+                feed_title = (child.text or "").strip()
+                break
+
+        entries = []
+        for item in channel:
+            if _strip_xml_tag(item.tag).lower() != "item":
+                continue
+            title = ""
+            link = ""
+            pub = ""
+            for c in item:
+                t = _strip_xml_tag(c.tag).lower()
+                if t == "title":
+                    title = (c.text or "").strip()
+                elif t == "link":
+                    link = (c.text or "").strip() or (c.attrib.get("href") or "").strip()
+                elif t in {"pubdate", "published", "updated", "date"}:
+                    pub = (c.text or "").strip()
+            if not title:
+                title = link
+            entries.append({"title": title, "link": link, "published": pub})
+        return {"format": "rss", "feed": {"title": feed_title}, "entries": entries}
+
+    if root_tag == "feed":
+        feed_title = ""
+        for child in root:
+            if _strip_xml_tag(child.tag).lower() == "title":
+                feed_title = (child.text or "").strip()
+                break
+
+        entries = []
+        for ent in root:
+            if _strip_xml_tag(ent.tag).lower() != "entry":
+                continue
+            title = ""
+            link = ""
+            pub = ""
+            for c in ent:
+                t = _strip_xml_tag(c.tag).lower()
+                if t == "title":
+                    title = (c.text or "").strip()
+                elif t == "link":
+                    rel = (c.attrib.get("rel") or "").strip().lower()
+                    href = (c.attrib.get("href") or "").strip()
+                    if href and (not link) and (not rel or rel == "alternate"):
+                        link = href
+                elif t in {"published", "updated"}:
+                    pub = (c.text or "").strip()
+            if not title:
+                title = link
+            entries.append({"title": title, "link": link, "published": pub})
+        return {"format": "atom", "feed": {"title": feed_title}, "entries": entries}
+
+    return {"format": "xml", "feed": {"title": ""}, "entries": []}
+
+
+_rss_host_limit_lock = Lock()
+_rss_host_semaphores: Dict[str, Any] = {}
+_rss_host_recent: Dict[str, deque] = {}
+
+
+def get_rss_host_semaphore(host: str):
+    h = (host or "").strip().lower() or "_"
+    with _rss_host_limit_lock:
+        sem = _rss_host_semaphores.get(h)
+        if sem is None:
+            max_conc = 1
+            try:
+                max_conc = int(os.environ.get("TREND_RADAR_RSS_HOST_CONCURRENCY", "1"))
+            except Exception:
+                max_conc = 1
+            sem = Semaphore(max_conc)
+            _rss_host_semaphores[h] = sem
+        return sem
+
+
+def rss_host_rate_limit_sleep(host: str) -> None:
+    h = (host or "").strip().lower() or "_"
+    max_per_10s = 5
+    try:
+        max_per_10s = int(os.environ.get("TREND_RADAR_RSS_HOST_RATE_10S", "5"))
+    except Exception:
+        max_per_10s = 5
+
+    now = time.time()
+    with _rss_host_limit_lock:
+        dq = _rss_host_recent.get(h)
+        if dq is None:
+            dq = deque(maxlen=max_per_10s * 3)
+            _rss_host_recent[h] = dq
+        while dq and now - dq[0] > 10:
+            dq.popleft()
+        if len(dq) >= max_per_10s:
+            sleep_s = max(0.0, 10 - (now - dq[0]))
+        else:
+            sleep_s = 0.0
+        dq.append(now)
+    if sleep_s > 0:
+        time.sleep(min(2.0, sleep_s))
+
+
+def rss_proxy_fetch_cached(url: str) -> Dict[str, Any]:
+    cache = get_cache()
+    key = f"rssproxy:{_md5_hex(url)}"
+    cached = cache.get(key, ttl=300)
+    if isinstance(cached, dict):
+        return cached
+
+    parsed0 = urlparse(url)
+    host0 = (parsed0.hostname or "").strip().lower()
+
+    sem = get_rss_host_semaphore(host0)
+    sem.acquire()
+    try:
+        current_url = url
+        redirects = 0
+        attempts = 0
+        while True:
+            current_url = validate_http_url(current_url)
+            rss_host_rate_limit_sleep(host0)
+
+            headers = _rss_default_headers()
+
+            retry_after_s = None
+            resp = None
+            try:
+                timeout = _rss_http_timeouts()
+                resp = requests.get(
+                    current_url,
+                    headers=headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                    stream=True,
+                )
+
+                if resp.status_code in {301, 302, 303, 307, 308}:
+                    loc = (resp.headers.get("Location") or "").strip()
+                    if not loc:
+                        raise ValueError("Redirect without location")
+                    redirects += 1
+                    if redirects > 5:
+                        raise ValueError("Too many redirects")
+                    current_url = urljoin(current_url, loc)
+                    continue
+
+                if resp.status_code == 429:
+                    logger.warning(
+                        "RSS upstream may be blocked or rate limited (status=429). 可能触发了反爬或访问频率限制. url=%s",
+                        current_url,
+                    )
+                    ra = (resp.headers.get("Retry-After") or "").strip()
+                    try:
+                        retry_after_s = int(ra)
+                    except Exception:
+                        retry_after_s = None
+                    raise ValueError("Upstream rate limited")
+
+                if resp.status_code == 403:
+                    logger.warning(
+                        "RSS upstream may be blocked or rate limited (status=403). 可能触发了反爬或访问频率限制. url=%s",
+                        current_url,
+                    )
+
+                if resp.status_code >= 500:
+                    if resp.status_code == 503:
+                        logger.warning(
+                            "RSS upstream may be blocked or rate limited (status=503). 可能触发了反爬或访问频率限制. url=%s",
+                            current_url,
+                        )
+                    raise ValueError(f"Upstream error: {resp.status_code}")
+
+                if resp.status_code >= 400:
+                    raise ValueError(f"Upstream error: {resp.status_code}")
+
+                content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+                max_bytes = 2 * 1024 * 1024
+                try:
+                    resp.raw.decode_content = True
+                except Exception:
+                    pass
+                data = resp.raw.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError("Response too large")
+
+                stripped = data.lstrip()
+                if stripped.startswith(b"<"):
+                    head = stripped[:512].lower()
+                    is_html = (b"<html" in head) or (b"<!doctype html" in head)
+                    if is_html:
+                        snippet = stripped[:240].decode("utf-8", errors="replace")
+                        raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
+
+                try:
+                    parsed = parse_feed_content(content_type, data)
+                except Exception as e:
+                    if stripped[:2] == b"\x1f\x8b":
+                        raise ValueError(
+                            "Upstream returned gzip-compressed bytes that could not be decoded"
+                        ) from e
+                    raise
+
+                result = {
+                    "url": url,
+                    "final_url": current_url,
+                    "content_type": content_type,
+                    "data": parsed,
+                    "etag": (resp.headers.get("ETag") or "").strip(),
+                    "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                }
+                cache.set(key, result)
+                return result
+            except (requests.Timeout, requests.ConnectionError) as e:
+                attempts += 1
+                if attempts >= 3:
+                    raise ValueError("Upstream timeout") from e
+                time.sleep(min(4.0, 0.5 * (2 ** (attempts - 1))))
+                continue
+            except ValueError as e:
+                msg = str(e)
+                retryable = (
+                    ("rate limited" in msg.lower())
+                    or ("upstream error: 5" in msg.lower())
+                    or ("upstream timeout" in msg.lower())
+                )
+                if retryable:
+                    attempts += 1
+                    if attempts >= 3:
+                        raise
+                    if retry_after_s is not None and retry_after_s > 0:
+                        time.sleep(min(6.0, float(retry_after_s)))
+                    else:
+                        time.sleep(min(4.0, 0.5 * (2 ** (attempts - 1))))
+                    continue
+                raise
+            finally:
+                try:
+                    if resp is not None:
+                        resp.close()
+                except Exception:
+                    pass
+    finally:
+        try:
+            sem.release()
+        except Exception:
+            pass
+
+
+def _now_ts() -> int:
+    return int(time.time())
+
+
+def rss_proxy_cache_get_any_ttl(url: str, ttl: int) -> Optional[Dict[str, Any]]:
+    cache = get_cache()
+    key = f"rssproxy:{_md5_hex(url)}"
+    cached = cache.get(key, ttl=ttl)
+    return cached if isinstance(cached, dict) else None
+
+
+def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "") -> Dict[str, Any]:
+    cache = get_cache()
+    key = f"rssproxy:{_md5_hex(url)}"
+
+    parsed0 = urlparse(url)
+    host0 = (parsed0.hostname or "").strip().lower()
+
+    sem = get_rss_host_semaphore(host0)
+    sem.acquire()
+    try:
+        current_url = url
+        redirects = 0
+        attempts = 0
+        cur_etag = (etag or "").strip()
+        cur_lm = (last_modified or "").strip()
+        while True:
+            current_url = validate_http_url(current_url)
+            rss_host_rate_limit_sleep(host0)
+
+            headers = _rss_default_headers()
+            if cur_etag:
+                headers["If-None-Match"] = cur_etag
+            if cur_lm:
+                headers["If-Modified-Since"] = cur_lm
+
+            retry_after_s = None
+            resp = None
+            try:
+                timeout = _rss_http_timeouts()
+                resp = requests.get(
+                    current_url,
+                    headers=headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                    stream=True,
+                )
+
+                if resp.status_code in {301, 302, 303, 307, 308}:
+                    loc = (resp.headers.get("Location") or "").strip()
+                    if not loc:
+                        raise ValueError("Redirect without location")
+                    redirects += 1
+                    if redirects > 5:
+                        raise ValueError("Too many redirects")
+                    current_url = urljoin(current_url, loc)
+                    continue
+
+                if resp.status_code == 304:
+                    cached_any = rss_proxy_cache_get_any_ttl(url, ttl=10**9)
+                    if cached_any is not None:
+                        cached_any = dict(cached_any)
+                        cached_any["etag"] = (resp.headers.get("ETag") or cur_etag or "").strip()
+                        cached_any["last_modified"] = (
+                            resp.headers.get("Last-Modified") or cur_lm or ""
+                        ).strip()
+                        cache.set(key, cached_any)
+                        return cached_any
+                    cur_etag = ""
+                    cur_lm = ""
+                    continue
+
+                if resp.status_code == 429:
+                    logger.warning(
+                        "RSS upstream may be blocked or rate limited (status=429). 可能触发了反爬或访问频率限制. url=%s",
+                        current_url,
+                    )
+                    ra = (resp.headers.get("Retry-After") or "").strip()
+                    try:
+                        retry_after_s = int(ra)
+                    except Exception:
+                        retry_after_s = None
+                    raise ValueError("Upstream rate limited")
+
+                if resp.status_code == 403:
+                    logger.warning(
+                        "RSS upstream may be blocked or rate limited (status=403). 可能触发了反爬或访问频率限制. url=%s",
+                        current_url,
+                    )
+
+                if resp.status_code >= 500:
+                    if resp.status_code == 503:
+                        logger.warning(
+                            "RSS upstream may be blocked or rate limited (status=503). 可能触发了反爬或访问频率限制. url=%s",
+                            current_url,
+                        )
+                    raise ValueError(f"Upstream error: {resp.status_code}")
+
+                if resp.status_code >= 400:
+                    raise ValueError(f"Upstream error: {resp.status_code}")
+
+                content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+                max_bytes = 2 * 1024 * 1024
+                try:
+                    resp.raw.decode_content = True
+                except Exception:
+                    pass
+                data = resp.raw.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError("Response too large")
+
+                stripped = data.lstrip()
+                if stripped.startswith(b"<"):
+                    head = stripped[:512].lower()
+                    is_html = (b"<html" in head) or (b"<!doctype html" in head)
+                    if is_html:
+                        snippet = stripped[:240].decode("utf-8", errors="replace")
+                        raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
+
+                try:
+                    parsed = parse_feed_content(content_type, data)
+                except Exception as e:
+                    if stripped[:2] == b"\x1f\x8b":
+                        raise ValueError(
+                            "Upstream returned gzip-compressed bytes that could not be decoded"
+                        ) from e
+                    raise
+
+                result = {
+                    "url": url,
+                    "final_url": current_url,
+                    "content_type": content_type,
+                    "data": parsed,
+                    "etag": (resp.headers.get("ETag") or "").strip(),
+                    "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                }
+                cache.set(key, result)
+                return result
+            except (requests.Timeout, requests.ConnectionError) as e:
+                attempts += 1
+                if attempts >= 3:
+                    raise ValueError("Upstream timeout") from e
+                time.sleep(min(4.0, 0.5 * (2 ** (attempts - 1))))
+                continue
+            except ValueError as e:
+                msg = str(e)
+                retryable = (
+                    ("rate limited" in msg.lower())
+                    or ("upstream error: 5" in msg.lower())
+                    or ("upstream timeout" in msg.lower())
+                )
+                if retryable:
+                    attempts += 1
+                    if attempts >= 3:
+                        raise
+                    if retry_after_s is not None and retry_after_s > 0:
+                        time.sleep(min(6.0, float(retry_after_s)))
+                    else:
+                        time.sleep(min(4.0, 0.5 * (2 ** (attempts - 1))))
+                    continue
+                raise
+            finally:
+                try:
+                    if resp is not None:
+                        resp.close()
+                except Exception:
+                    pass
+    finally:
+        try:
+            sem.release()
+        except Exception:
+            pass
+
+
+@router.get("/api/proxy/fetch")
+async def api_proxy_fetch(request: Request, url: str = Query(...)):
+    allowed = None
+    fn = getattr(request.app.state, "db_find_enabled_source_by_url", None)
+    if callable(fn):
+        allowed = fn(url)
+    if allowed is None:
+        ra = getattr(request.app.state, "require_admin", None)
+        if callable(ra):
+            ra(request)
+
+    try:
+        result = await asyncio.to_thread(rss_proxy_fetch_cached, url)
+        return UnicodeJSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+
+@router.get("/api/rss-sources")
+async def api_rss_sources(request: Request):
+    try:
+        init_fn = getattr(request.app.state, "init_default_rss_sources_if_empty", None)
+        if callable(init_fn):
+            init_fn()
+        list_fn = getattr(request.app.state, "db_list_rss_sources", None)
+        items = list_fn(enabled_only=True) if callable(list_fn) else []
+        return UnicodeJSONResponse(content={"sources": items})
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=500)
+
+
+@router.get("/api/rss-source-categories")
+async def api_rss_source_categories(request: Request):
+    try:
+        init_fn = getattr(request.app.state, "init_default_rss_sources_if_empty", None)
+        if callable(init_fn):
+            init_fn()
+        conn = get_online_db_conn(project_root=request.app.state.project_root)
+        cur = conn.execute(
+            "SELECT category, COUNT(*) FROM rss_sources WHERE enabled = 1 GROUP BY category ORDER BY COUNT(*) DESC"
+        )
+        rows = cur.fetchall() or []
+        items = []
+        total = 0
+        for r in rows:
+            cat = str(r[0] or "").strip()
+            cnt = int(r[1] or 0)
+            total += cnt
+            if cat:
+                items.append({"id": cat, "name": cat, "count": cnt})
+        items.insert(0, {"id": "", "name": "全部", "count": total})
+        return UnicodeJSONResponse(content={"categories": items})
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=500)
+
+
+@router.get("/api/rss-sources/search")
+async def api_rss_sources_search(
+    request: Request,
+    q: str = Query(""),
+    category: str = Query(""),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0, le=100000),
+):
+    try:
+        init_fn = getattr(request.app.state, "init_default_rss_sources_if_empty", None)
+        if callable(init_fn):
+            init_fn()
+        conn = get_online_db_conn(project_root=request.app.state.project_root)
+        qv = (q or "").strip()
+        cat = (category or "").strip()
+
+        where = ["enabled = 1"]
+        args: List[Any] = []
+        if cat:
+            where.append("category = ?")
+            args.append(cat)
+        if qv:
+            where.append("(name LIKE ? OR url LIKE ? OR host LIKE ?)")
+            like = f"%{qv}%"
+            args.extend([like, like, like])
+
+        where_sql = " AND ".join(where)
+        cur = conn.execute(f"SELECT COUNT(*) FROM rss_sources WHERE {where_sql}", tuple(args))
+        row = cur.fetchone()
+        total = int(row[0] if row else 0)
+
+        args2 = list(args)
+        args2.extend([int(limit), int(offset)])
+        cur = conn.execute(
+            f"SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources WHERE {where_sql} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            tuple(args2),
+        )
+        rows = cur.fetchall() or []
+        row_to = getattr(request.app.state, "row_to_rss_source", None)
+        if callable(row_to):
+            sources = [row_to(r) for r in rows]
+        else:
+            sources = []
+        next_offset = offset + len(sources)
+        has_more = next_offset < total
+        return UnicodeJSONResponse(
+            content={
+                "sources": sources,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "next_offset": next_offset if has_more else None,
+            }
+        )
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=500)
+
+
+@router.get("/api/rss-sources/preview")
+async def api_rss_sources_preview(request: Request, source_id: str = Query(...)):
+    get_fn = getattr(request.app.state, "db_get_rss_source", None)
+    src = get_fn(source_id) if callable(get_fn) else None
+    if not src or not src.get("enabled"):
+        return JSONResponse(content={"detail": "Source not found"}, status_code=404)
+    try:
+        result = await asyncio.to_thread(rss_proxy_fetch_cached, src.get("url") or "")
+        return UnicodeJSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+
+@router.post("/api/rss-source-requests")
+async def api_rss_source_requests(request: Request, body: Dict[str, Any] = Body(...)):
+    url = (body.get("url") or "").strip() if isinstance(body, dict) else ""
+    title = (body.get("title") or "").strip() if isinstance(body, dict) else ""
+    note = (body.get("note") or "").strip() if isinstance(body, dict) else ""
+    if not url:
+        return JSONResponse(content={"detail": "Missing url"}, status_code=400)
+    if not title:
+        return JSONResponse(content={"detail": "Missing title"}, status_code=400)
+    if not note:
+        return JSONResponse(content={"detail": "Missing note"}, status_code=400)
+
+    try:
+        url = validate_http_url(url)
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+    host = (urlparse(url).hostname or "").strip().lower() or "-"
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    fn = getattr(request.app.state, "db_find_enabled_source_by_url", None)
+    existing = fn(url) if callable(fn) else None
+    if existing is not None:
+        return UnicodeJSONResponse(content={"status": "approved", "source": existing})
+
+    cur = conn.execute(
+        "SELECT id, status, reason FROM rss_source_requests WHERE url = ? ORDER BY id DESC LIMIT 1",
+        (url,),
+    )
+    row = cur.fetchone()
+    if row and str(row[1] or "") in {"pending", "rejected"}:
+        return UnicodeJSONResponse(
+            content={
+                "request_id": int(row[0]),
+                "status": str(row[1]),
+                "reason": str(row[2] or ""),
+            }
+        )
+
+    now = _now_ts()
+    cur = conn.execute(
+        "INSERT INTO rss_source_requests(url, host, title, note, status, reason, created_at, reviewed_at, source_id) VALUES (?, ?, ?, ?, 'pending', '', ?, 0, '')",
+        (url, host, title, note, now),
+    )
+    conn.commit()
+    return UnicodeJSONResponse(content={"request_id": int(cur.lastrowid), "status": "pending"})

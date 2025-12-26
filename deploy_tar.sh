@@ -138,6 +138,11 @@ COPYFILE_DISABLE=1 COPY_EXTENDED_ATTRIBUTES_DISABLE=1 tar -czf "${PACKAGE_LOCAL}
   --exclude "./playwright-report/" \
   --exclude "./test-results" \
   --exclude "./test-results/" \
+  --exclude "./logs" \
+  --exclude "./logs/" \
+  --exclude "./rss_feeds.csv" \
+  --exclude "./rss_feeds_manual_additions.csv" \
+  --exclude "./RSSrequirement.txt" \
   --exclude "./output" \
   --exclude "./output/" \
   --exclude "./.playwright" \

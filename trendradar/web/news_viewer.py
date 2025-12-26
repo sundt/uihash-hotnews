@@ -77,6 +77,7 @@ PLATFORM_CATEGORIES = {
         "news_limit": 10,
         "platforms": [
             "caixin",
+            "sina_finance_roll",
             "wallstreetcn-hot", "wallstreetcn-quick", "cls-hot",
             "cls-telegraph", "gelonghui", "xueqiu", "jin10",
         ]
@@ -251,12 +252,24 @@ class NewsViewerService:
             removed_news = []
             filter_stats = {"filtered_count": 0, "mode": "off"}
 
+        viewer_config = self._load_viewer_config() or {}
+        disabled_platforms = viewer_config.get("disabled_platforms", [])
+        disabled_set = set(
+            [
+                str(pid or "").strip()
+                for pid in (disabled_platforms if isinstance(disabled_platforms, list) else [])
+                if str(pid or "").strip()
+            ]
+        )
+        if disabled_set:
+            filtered_news = [n for n in filtered_news if str(n.get("platform") or "").strip() not in disabled_set]
+            removed_news = [n for n in removed_news if str(n.get("platform") or "").strip() not in disabled_set]
+
         # 检测跨平台新闻
         cross_platform_news = self._detect_cross_platform_news(filtered_news)
 
         # 按分类组织新闻
         categories = {}
-        viewer_config = self._load_viewer_config() or {}
         new_badges = viewer_config.get("new_badges", {}) if isinstance(viewer_config, dict) else {}
         new_platform_ids = set(new_badges.get("platforms", []) or []) if isinstance(new_badges, dict) else set()
         new_category_ids = set(new_badges.get("categories", []) or []) if isinstance(new_badges, dict) else set()

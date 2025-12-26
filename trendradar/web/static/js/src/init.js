@@ -13,13 +13,9 @@ ready(function() {
         if (badge) badge.style.display = 'none';
     }
 
-    const settingsBtn = document.querySelector('.category-settings-btn');
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => {
-            const badge = document.getElementById('categorySettingsNewBadge');
-            if (badge) badge.style.display = 'none';
-            localStorage.setItem('category_settings_badge_dismissed', 'true');
-        });
+    if (localStorage.getItem('rss_subscription_badge_dismissed') === 'true') {
+        const badge = document.getElementById('rssSubscriptionNewBadge');
+        if (badge) badge.style.display = 'none';
     }
 
     // 检查用户是否有自定义配置
@@ -27,7 +23,8 @@ ready(function() {
     const hasCustomConfig = config && (
         (config.customCategories && config.customCategories.length > 0) ||
         (config.hiddenDefaultCategories && config.hiddenDefaultCategories.length > 0) ||
-        (config.categoryOrder && config.categoryOrder.length > 0)
+        (config.categoryOrder && config.categoryOrder.length > 0) ||
+        (config.platformOrder && typeof config.platformOrder === 'object' && Object.keys(config.platformOrder).length > 0)
     );
 
     if (hasCustomConfig) {

@@ -256,11 +256,19 @@ def build_default_registry() -> ProviderRegistry:
         # provider optional; keep registry usable even if import fails
         pass
 
+    try:
+        from .http_json import HttpJsonProvider
+
+        reg.register(HttpJsonProvider())
+    except Exception:
+        # provider optional; keep registry usable even if import fails
+        pass
+
     return reg
 
 
 def _main() -> int:
-    root = Path(__file__).resolve().parents[3]
+    root = Path(__file__).resolve().parents[2]
     config_path = root / "config" / "config.yaml"
     registry = build_default_registry()
     ok, metrics = run_provider_ingestion_once(

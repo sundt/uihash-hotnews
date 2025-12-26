@@ -88,6 +88,12 @@ class LocalStorageBackend(StorageBackend):
         if db_path not in self._db_connections:
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+                conn.commit()
+            except Exception:
+                pass
             self._init_tables(conn)
             self._db_connections[db_path] = conn
 

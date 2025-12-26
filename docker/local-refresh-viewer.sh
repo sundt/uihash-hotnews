@@ -62,6 +62,11 @@ echo "  - project_root: ${PROJECT_ROOT}"
 echo "  - viewer_port:  ${VIEWER_PORT}"
 echo "  - ingest:       ${INGEST}"
 
+if [ "${FORCE_CONFIG_REV:-}" = "1" ] && [ -z "${CONFIG_REV:-}" ]; then
+  CONFIG_REV="$(date +%s)"
+  export CONFIG_REV
+fi
+
 echo "🧱 Building trend-radar-viewer..."
 $COMPOSE_CMD -f docker/docker-compose-build.yml build trend-radar-viewer
 

@@ -4,7 +4,7 @@ import hashlib
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -112,6 +112,22 @@ def _format_match_time_for_title(raw: str) -> str:
 class TencentNbaProvider:
     provider_id: str = "tencent_nba"
 
+    def _get_proxies(self, *, ctx: ProviderFetchContext, platform_config: Dict[str, Any]) -> Optional[Dict[str, str]]:
+        proxy = platform_config.get("proxy")
+        if isinstance(proxy, str) and proxy.strip():
+            p = proxy.strip()
+            return {"http": p, "https": p}
+
+        use_proxy = bool(ctx.config.get("USE_PROXY", False))
+        if not use_proxy:
+            return None
+
+        default_proxy = ctx.config.get("DEFAULT_PROXY")
+        if not isinstance(default_proxy, str) or not default_proxy.strip():
+            return None
+        p = default_proxy.strip()
+        return {"http": p, "https": p}
+
     def fetch(
         self,
         *,
@@ -128,6 +144,8 @@ class TencentNbaProvider:
         past_days = int(past_days_raw or 6)  # 今天+过去6天
         max_items = int(platform_config.get("max_items") or 40)
         timeout_s = int(platform_config.get("timeout_s") or 10)
+        verify_ssl = bool(platform_config.get("verify_ssl", True))
+        retries = int(platform_config.get("retries") or 2)
 
         # 只获取今天及过去 past_days 天的数据
         today = date.today()
@@ -139,17 +157,34 @@ class TencentNbaProvider:
         url = f"https://matchweb.sports.qq.com/kbs/list?columnId=100000&startTime={start_str}&endTime={end_str}"
 
         try:
-            resp = requests.get(
-                url,
-                headers={
-                    "Referer": "https://kbs.sports.qq.com/",
-                    "User-Agent": "Mozilla/5.0",
-                    "Accept": "application/json, text/plain, */*",
-                },
-                timeout=timeout_s,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
+            proxies = self._get_proxies(ctx=ctx, platform_config=platform_config)
+            last_err: Optional[BaseException] = None
+            for attempt in range(max(1, retries + 1)):
+                try:
+                    resp = requests.get(
+                        url,
+                        headers={
+                            "Referer": "https://kbs.sports.qq.com/",
+                            "User-Agent": "Mozilla/5.0",
+                            "Accept": "application/json, text/plain, */*",
+                        },
+                        timeout=timeout_s,
+                        proxies=proxies,
+                        verify=verify_ssl,
+                    )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    resp.close()
+                    break
+                except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                    last_err = e
+                    try:
+                        resp.close()  # type: ignore[name-defined]
+                    except Exception:
+                        pass
+                    if attempt >= retries:
+                        raise
+                    time.sleep(0.35)
         except Exception as e:
             raise ProviderFetchError(
                 f"failed to fetch: {e}",

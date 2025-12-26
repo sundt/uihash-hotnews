@@ -14,6 +14,9 @@ viewer:
   # 过滤模式：strict(严格-任意匹配即过滤) | moderate(适中-2+关键词匹配) | off(关闭过滤)
   # 注意：前端已实现用户自定义过滤，建议设为 off
   filter_mode: "off"
+
+  disabled_platforms:
+    - "sina_finance_live"
   
   # CDN 配置（可选）
   # 如果配置了 cdn_base_url，静态资源将从 CDN 加载
@@ -35,7 +38,7 @@ viewer:
     keywords_file: "config/filter_blacklist.txt"
   # 定时数据获取配置
   auto_fetch: true               # 是否自动启动定时获取任务
-  fetch_interval_minutes: 5      # 获取间隔（分钟），范围 5-1440
+  fetch_interval_minutes: 15      # 获取间隔（分钟），范围 5-1440
   fetch_on_startup: true          # 服务启动时是否立即获取一次数据
 
 # 存储配置
@@ -105,6 +108,32 @@ provider_ingestion:
         days: 7
         max_items: 30
         timeout_s: 10
+
+    - id: "sina_finance_roll"
+      name: "新浪财经-滚动"
+      provider: "http_json"
+      config:
+        method: "GET"
+        url: "https://feed.mix.sina.com.cn/api/roll/get"
+        params:
+          pageid: 153
+          lid: 2516
+          num: 50
+          page: 1
+        response_path: "result.data"
+        prefix_time: false
+        field_mapping:
+          title: "title"
+          url: "url"
+          source: "media_name"
+          time: "ctime"
+          summary: "intro"
+        rate_limit_rps: 2
+        timeout_s: 15
+        max_items: 60
+        headers:
+          User-Agent: "Mozilla/5.0"
+          Referer: "https://finance.sina.com.cn/"
 
 # - daily（当日汇总模式）
 #   • 推送时机：按时推送(默认每小时推送一次)

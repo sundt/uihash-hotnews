@@ -43,6 +43,22 @@ export const tabs = {
         if (TR.paging && typeof TR.paging.scheduleAutofillActiveTab === 'function') {
             TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
         }
+
+        try {
+            const hasItems = !!paneEl.querySelector('.news-item');
+            const hasPlaceholder = !!paneEl.querySelector('.news-placeholder');
+            const shouldLoad = !hasItems && hasPlaceholder;
+
+            if (shouldLoad) {
+                if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleBulkLoadCategory === 'function') {
+                    TR.infiniteScroll.scheduleBulkLoadCategory(categoryId);
+                } else if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleEnsureCategoryLoaded === 'function') {
+                    TR.infiniteScroll.scheduleEnsureCategoryLoaded(categoryId);
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
     },
 
     restoreActiveTab() {

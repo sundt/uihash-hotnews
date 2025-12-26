@@ -637,6 +637,26 @@ export const settings = {
                     _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
                 });
             });
+        } else {
+            Object.entries(serverCategories).forEach(([catId, cat]) => {
+                if (!_defaultCategories[catId]) {
+                    _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
+                } else {
+                    if (!_defaultCategories[catId].platforms) _defaultCategories[catId].platforms = [];
+                    const existingPlatforms = new Set(_defaultCategories[catId].platforms || []);
+                    Object.keys(cat.platforms || {}).forEach((pid) => {
+                        if (!existingPlatforms.has(pid)) {
+                            _defaultCategories[catId].platforms.push(pid);
+                        }
+                    });
+                }
+
+                Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                    if (!_allPlatforms[pid]) {
+                        _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
+                    }
+                });
+            });
         }
 
         const allPlatformData = {};
@@ -673,14 +693,30 @@ export const settings = {
                 const userPlatformOrder = platformOrder[catId];
 
                 if (userPlatformOrder && userPlatformOrder.length > 0) {
-                    const platforms = {};
+                    const inOrder = [];
+                    const inOrderSet = new Set();
                     userPlatformOrder.forEach(pid => {
                         if (serverCat.platforms && serverCat.platforms[pid]) {
-                            platforms[pid] = serverCat.platforms[pid];
+                            inOrder.push(pid);
+                            inOrderSet.add(pid);
                         }
                     });
+
+                    const rssMissing = [];
+                    const otherMissing = [];
                     Object.keys(serverCat.platforms || {}).forEach(pid => {
-                        if (!platforms[pid]) {
+                        if (inOrderSet.has(pid)) return;
+                        if (String(pid || '').startsWith('rss-')) {
+                            rssMissing.push(pid);
+                        } else {
+                            otherMissing.push(pid);
+                        }
+                    });
+
+                    const finalOrder = rssMissing.concat(inOrder, otherMissing);
+                    const platforms = {};
+                    finalOrder.forEach(pid => {
+                        if (serverCat.platforms && serverCat.platforms[pid]) {
                             platforms[pid] = serverCat.platforms[pid];
                         }
                     });

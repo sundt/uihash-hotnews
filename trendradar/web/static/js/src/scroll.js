@@ -55,6 +55,9 @@ export const scroll = {
 
             let ticking = false;
             grid.addEventListener('scroll', () => {
+                if (grid.dataset.trRestoring !== '1') {
+                    grid.dataset.trUserScrolled = '1';
+                }
                 if (ticking) return;
                 ticking = true;
                 requestAnimationFrame(() => {
@@ -80,6 +83,8 @@ export const scroll = {
             const grid = document.querySelector(`#tab-${tabId} .platform-grid`);
             if (!grid) return;
 
+            if (grid.dataset.trUserScrolled === '1') return;
+
             if (anchorId) {
                 let anchorCard = null;
                 grid.querySelectorAll('.platform-card').forEach((card) => {
@@ -88,12 +93,20 @@ export const scroll = {
                     }
                 });
                 if (anchorCard && anchorCard.offsetParent !== null) {
+                    grid.dataset.trRestoring = '1';
                     grid.scrollLeft = (anchorCard.offsetLeft || 0) + offsetX;
+                    requestAnimationFrame(() => {
+                        try { delete grid.dataset.trRestoring; } catch (_) {}
+                    });
                     return;
                 }
             }
 
+            grid.dataset.trRestoring = '1';
             grid.scrollLeft = left;
+            requestAnimationFrame(() => {
+                try { delete grid.dataset.trRestoring; } catch (_) {}
+            });
         };
 
         requestAnimationFrame(() => {

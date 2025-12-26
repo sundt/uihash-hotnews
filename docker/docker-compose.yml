@@ -90,8 +90,9 @@ services:
       - VIEWER_HOST=0.0.0.0
       - VIEWER_PORT=${VIEWER_PORT:-8090}
       - VIEWER_WORKERS=${VIEWER_WORKERS:-2}
+      - TREND_RADAR_ADMIN_TOKEN=${TREND_RADAR_ADMIN_TOKEN:-}
       - APP_VERSION=${TREND_RADAR_VIEWER_TAG}
-      - CONFIG_REV=1
+      - CONFIG_REV=${CONFIG_REV:-}
 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()"]

@@ -1,0 +1,149 @@
+    <div class="settings-modal-overlay" id="rssSourcePickerModal" style="z-index: 9999;">
+        <div class="settings-modal" onclick="event.stopPropagation()" style="max-width:900px;">
+            <div class="settings-modal-header">
+                <span class="settings-modal-title">选择 RSS 源</span>
+                <button class="settings-modal-close" onclick="closeRssSourcePicker()">&times;</button>
+            </div>
+            <div class="settings-modal-body" style="display:flex;gap:12px;">
+                <div style="width:200px;flex:0 0 auto;">
+                    <div class="settings-section-title" style="margin-bottom:8px;">分类</div>
+                    <div id="rssSourceCategoryList" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div class="edit-field" style="margin-top:0;">
+                        <label>搜索（name / url）</label>
+                        <input type="text" id="rssSourceSearchInput" placeholder="输入关键字">
+                    </div>
+                    <div id="rssSourceResults" style="position:relative;height:360px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#fff;"></div>
+                    <div id="rssSourcePickerStatus" style="margin-top:8px;color:#6b7280;font-size:0.85rem;"></div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <button class="settings-btn-secondary" onclick="closeRssSourcePicker()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-modal-overlay" id="categorySettingsModal" onclick="closeCategorySettingsOnOverlay(event)">
+        <div class="settings-modal" onclick="event.stopPropagation()">
+            <div class="settings-modal-header">
+                <span class="settings-modal-title">⚙️ 栏目设置</span>
+                <button class="settings-modal-close" onclick="closeCategorySettings()">&times;</button>
+            </div>
+            <div class="settings-modal-body">
+                <div class="settings-section">
+                    <button class="add-category-btn" onclick="showAddCategoryPanel()">+ 新增自定义栏目</button>
+                </div>
+                <div class="category-edit-panel" id="categoryEditPanel">
+                    <div class="edit-field">
+                        <label>栏目名称</label>
+                        <input type="text" id="editCategoryName" placeholder="输入栏目名称">
+                    </div>
+                    <div class="edit-field">
+                        <label>选择平台 <span style="font-weight:normal;color:#6b7280;">(拖拽排序)</span></label>
+                        <div class="platform-select-toolbar">
+                            <input class="platform-select-search" type="text" id="platformSearchInput" placeholder="搜索平台..." oninput="setPlatformSearchQuery(this.value)">
+                            <div class="platform-select-actions">
+                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('all')">全选</button>
+                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('none')">全不选</button>
+                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('clear')">清空</button>
+                            </div>
+                        </div>
+                        <div class="platform-select-list" id="platformSelectList"></div>
+                    </div>
+                    <div class="edit-field">
+                        <label>关键词过滤</label>
+                        <div class="filter-input-row">
+                            <label class="filter-mode-toggle" title="关键词模式：过滤=隐藏命中关键词；显示=只显示命中关键词">
+                                <input type="checkbox" id="categoryFilterModeToggle" onchange="handleCategoryFilterModeToggle(this)">
+                                <span class="filter-mode-pill">
+                                    <span class="filter-mode-thumb"></span>
+                                    <span class="filter-mode-off">过滤</span>
+                                    <span class="filter-mode-on">显示</span>
+                                </span>
+                            </label>
+                            <input type="text" class="filter-input" id="categoryFilterInput" placeholder="输入关键词，回车添加..." onkeypress="handleCategoryFilterKeypress(event)">
+                            <button class="filter-add-btn" onclick="addCategoryFilterKeyword()">+ 添加</button>
+                        </div>
+                        <div class="filter-tags" id="categoryFilterTags"></div>
+                    </div>
+                </div>
+
+                <div class="category-list-controls">
+                    <div class="settings-section-title" style="margin:0;">
+                        <button class="platform-select-action-btn" id="categoryListToggleBtn" type="button" onclick="toggleCategoryListCollapseInSettings()">收起栏目列表</button>
+                        <span style="font-weight:normal;color:#6b7280;font-size:0.75rem;">(拖拽排序)</span>
+                    </div>
+                </div>
+                <div class="category-list-wrapper collapsed" id="categoryListWrapper">
+                    <div class="category-list" id="categoryList"></div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <button class="settings-btn-secondary" onclick="cancelCategorySettings()">取消</button>
+                <button class="settings-btn-primary" onclick="saveCategorySettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-modal-overlay" id="rssSubscriptionModal">
+        <div class="settings-modal" onclick="event.stopPropagation()">
+            <div class="settings-modal-header">
+                <span class="settings-modal-title">🧩 RSS订阅</span>
+                <button class="settings-modal-close" onclick="closeRssSubscriptionModal()">&times;</button>
+            </div>
+            <div class="settings-modal-body">
+                <div class="edit-field">
+                    <label>RSS 源（从源库选择）</label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <div id="rssSelectedSourceLabel" style="flex:1;min-width:0;padding:10px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">未选择</div>
+                        <input type="hidden" id="rssSelectedSourceId" value="">
+                        <button type="button" class="platform-select-action-btn" onclick="openRssSourcePicker()">选择RSS源</button>
+                    </div>
+                </div>
+                <div class="edit-field">
+                    <label>Feed 标题（可选）</label>
+                    <input type="text" id="rssFeedTitle" placeholder="自动从预览填充，也可手动输入">
+                </div>
+                <div class="edit-field">
+                    <label>栏目（column）</label>
+                    <input type="text" id="rssColumn" value="RSS" placeholder="例如：AI / 资讯 / 博客">
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button type="button" class="platform-select-action-btn" onclick="previewRssSubscription()">预览</button>
+                    <button type="button" class="platform-select-action-btn" onclick="toggleRssRequestSection()">申请收录</button>
+                </div>
+                <div id="rssSubscriptionSaveStatus" style="margin-top:8px;color:#6b7280;font-size:0.85rem;"></div>
+                <div class="settings-section" id="rssRequestSection" style="margin-top:10px;display:none;">
+                    <div class="settings-section-title">申请收录新 RSS 源</div>
+                    <div class="edit-field" style="margin-top:8px;">
+                        <label>URL</label>
+                        <input type="text" id="rssRequestUrl" placeholder="https://example.com/feed.xml">
+                    </div>
+                    <div class="edit-field">
+                        <label>标题</label>
+                        <input type="text" id="rssRequestTitle" placeholder="用于在源库里显示">
+                    </div>
+                    <div class="edit-field">
+                        <label>备注</label>
+                        <input type="text" id="rssRequestNote" placeholder="说明用途/栏目等，便于审核">
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="platform-select-action-btn" onclick="submitRssSourceRequest()">提交申请</button>
+                    </div>
+                </div>
+                <div class="settings-section" style="margin-top:10px;">
+                    <div class="settings-section-title">预览</div>
+                    <div id="rssSubscriptionPreview"></div>
+                </div>
+                <div class="settings-section" style="margin-top:10px;">
+                    <div class="settings-section-title">已保存订阅</div>
+                    <div id="rssSubscriptionList"></div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <button class="settings-btn-secondary" onclick="closeRssSubscriptionModal()">关闭</button>
+                <button class="settings-btn-primary" onclick="saveRssSubscriptions()">保存并刷新</button>
+            </div>
+        </div>
+    </div>

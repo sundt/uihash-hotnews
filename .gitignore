@@ -23,6 +23,16 @@ output/
 *.db
 *.log
 
+logs/
+rss_feeds.csv
+rss_feeds_manual_additions.csv
+RSSrequirement.txt
+
+workspace/metagpt/
+!workspace/metagpt/.gitkeep
+
+.venv-metagpt/
+
 # Environment
 .env
 .env.local
@@ -47,6 +57,13 @@ openspec/changes/*/
 !openspec/changes/update-category-settings-ux/**
 !openspec/changes/update-category-settings-modal-simplify/
 !openspec/changes/update-category-settings-modal-simplify/**
+
+!openspec/changes/update-rss-subscription-preview-gating/
+!openspec/changes/update-rss-subscription-preview-gating/**
+!openspec/changes/add-admin-rss-request-reopen/
+!openspec/changes/add-admin-rss-request-reopen/**
+!openspec/changes/update-rss-proxy-fetch-stability/
+!openspec/changes/update-rss-proxy-fetch-stability/**
 
 # OpenSpec archive
 openspec/changes/archive/
