@@ -2143,7 +2143,7 @@ TrendRadar provides two independent Docker images, deploy according to your need
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/config/frequency_words.txt -P config/
 
    # Download docker compose config
-   wget https://raw.githubusercontent.com/sundt/TrendRadar-Plus/main/docker/.env.example -P docker/
+   wget https://raw.githubusercontent.com/sundt/uihash-hotnews/main/docker/.env.example -P docker/
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose.yml -P docker/
 
    # Create local env file (DO NOT commit)
@@ -2434,7 +2434,7 @@ docker compose up -d
 # Method 2: Download docker-compose.yml separately
 mkdir trendradar && cd trendradar
 wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose.yml
-wget https://raw.githubusercontent.com/sundt/TrendRadar-Plus/main/docker/.env.example
+wget https://raw.githubusercontent.com/sundt/uihash-hotnews/main/docker/.env.example
 
 # Create local env file (DO NOT commit)
 cp docker/.env.example docker/.env
