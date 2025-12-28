@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="baidu-site-verification" content="codeva-FMb8nsTNbx" />
     <title>Hotnews-热点新闻</title>
+    <link rel="icon" href="{{ static_prefix }}/images/hxlogo.jpg?v={{ asset_rev }}" type="image/jpeg">
+    <link rel="apple-touch-icon" href="{{ static_prefix }}/images/hxlogo.jpg?v={{ asset_rev }}">
     <!-- 资源预加载提示 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -136,8 +138,12 @@
             {% endfor %}
         </div>
     </div>
-
+    
     {% include "_viewer_modals.html" %}
+
+    <div style="margin-top:14px;padding:10px 6px 18px 6px;color:#6b7280;font-size:12px;line-height:1.5;text-align:center;">
+        本站内容由系统自动聚合自互联网公开RSS源，仅提供信息索引与导读，版权归属于原作者。本站不对其准确性、完整性负责。如涉及版权或内容违规，请联系我们及时删除。
+    </div>
 
     <script src="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}"></script>
 </body>
