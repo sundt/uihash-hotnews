@@ -722,17 +722,23 @@ body.categories-ready .tab-content-area {
             display: flex;
         }
 
-        .settings-modal {
-            background: white;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 600px;
-            max-height: 70vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
+.settings-modal {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 85%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+#rssCatalogPreviewModal .settings-modal {
+    width: 96vw;
+    max-width: 1600px;
+    max-height: 92vh;
+}
 
         .settings-modal-header {
             display: flex;
@@ -742,6 +748,16 @@ body.categories-ready .tab-content-area {
             border-bottom: 1px solid #e5e7eb;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+        }
+
+        #rssCatalogPreviewModal #rssCatalogPreviewGrid {
+            align-items: start;
+        }
+
+        #rssCatalogPreviewModal #rssCatalogPreviewGrid .platform-card {
+            width: 100% !important;
+            flex: 0 0 auto !important;
+            box-sizing: border-box;
         }
 
         .settings-modal-title {

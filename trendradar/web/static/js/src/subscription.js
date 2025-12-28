@@ -792,6 +792,53 @@ export const subscription = {
         this.setSubscriptionsRaw(subs);
     },
 
+    ensureSnapshot() {
+        if (Array.isArray(_subsSnapshot)) return;
+        try {
+            _subsSnapshot = this.getSubscriptions();
+        } catch (e) {
+            _subsSnapshot = null;
+        }
+    },
+
+    stageFromCatalogPreview(opts = {}) {
+        const sid = String(opts?.source_id || opts?.rss_source_id || '').trim();
+        if (!sid) return;
+
+        const url = String(opts?.url || '').trim();
+        const feedTitle = String(opts?.feed_title || opts?.name || '').trim();
+        const column = String(opts?.column || 'RSS').trim() || 'RSS';
+
+        this.ensureSnapshot();
+
+        const subs = this.getSubscriptions();
+        const idx = subs.findIndex((s) => (s?.source_id && s.source_id === sid));
+        const item = {
+            source_id: sid,
+            url,
+            feed_title: feedTitle,
+            column,
+            platform_id: ''
+        };
+        if (idx >= 0) subs[idx] = item;
+        else subs.unshift(item);
+        this.setSubscriptions(subs);
+
+        const entriesCount = Number(opts?.entries_count ?? 0) || 0;
+        _previewStatusBySourceId.set(sid, {
+            ok: true,
+            entries_count: entriesCount,
+            ts: Date.now()
+        });
+
+        try {
+            _renderList();
+        } catch (e) {
+            // ignore
+        }
+        _updateRssGatingUI();
+    },
+
     open() {
         const modal = _getModalEl();
         if (!modal) return;

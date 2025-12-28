@@ -144,3 +144,24 @@
             </div>
         </div>
     </div>
+
+    <div class="settings-modal-overlay" id="rssCatalogPreviewModal" onclick="closeRssCatalogPreviewModalOnOverlay(event)">
+        <div class="settings-modal" onclick="event.stopPropagation()" style="max-width:1600px;">
+            <div class="settings-modal-header">
+                <span class="settings-modal-title">🔎 预览RSS</span>
+                <button class="settings-modal-close" onclick="closeRssCatalogPreviewModal()">&times;</button>
+            </div>
+            <div class="settings-modal-body" style="display:flex;flex-direction:column;gap:10px;min-height:0;flex:1;">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button type="button" class="platform-select-action-btn" onclick="rssCatalogPreviewNextBatch()">换一批</button>
+                    <button type="button" class="platform-select-action-btn" onclick="rssCatalogPreviewResetSeen()">重置已浏览</button>
+                    <button type="button" class="platform-select-action-btn primary" onclick="rssCatalogPreviewSaveAndRefresh()">保存并刷新</button>
+                    <div id="rssCatalogPreviewStatus" style="color:#6b7280;font-size:0.85rem;flex:1;min-width:200px;"></div>
+                </div>
+                <div id="rssCatalogPreviewGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:10px;min-height:0;"></div>
+            </div>
+            <div class="settings-modal-footer">
+                <button class="settings-btn-secondary" onclick="closeRssCatalogPreviewModal()">关闭</button>
+            </div>
+        </div>
+    </div>

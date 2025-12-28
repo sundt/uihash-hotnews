@@ -25,6 +25,7 @@ import './infinite-scroll.js';
 import './platform-reorder.js';
 import './category-tab-reorder.js';
 import './subscription.js';
+import './rss-catalog-preview.js';
 import './title-drag-scroll.js';
 
 // 初始化模块（必须最后导入）
