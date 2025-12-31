@@ -110,7 +110,7 @@ export class ViewerPage {
 
   async openFirstCategoryEditPanel() {
     await this.expandCategoryList();
-    const firstCategoryItem = this.categoryList.locator('.category-item').first();
+    const firstCategoryItem = this.categoryList.locator('.category-item:not([data-category-id="explore"])').first();
     await firstCategoryItem.locator('button:has-text("编辑")').click();
     await this.editPanel.waitFor({ state: 'visible' });
   }

@@ -20,9 +20,9 @@ test.describe('News Viewer Page', () => {
       expect(tabCount).toBeGreaterThan(0);
     });
 
-    test('should have first tab active by default', async () => {
-      const firstTab = viewerPage.categoryTabs.first();
-      await expect(firstTab).toHaveClass(/active/);
+    test('should have first non-explore tab active by default', async ({ page }) => {
+      const firstNonExploreTab = page.locator('.category-tabs .category-tab:not([data-category="explore"])').first();
+      await expect(firstNonExploreTab).toHaveClass(/active/);
     });
 
     test('should display platform cards', async () => {
@@ -35,7 +35,7 @@ test.describe('News Viewer Page', () => {
       await expect(page.locator('.platform-refresh-btn')).toHaveCount(0);
     });
 
-    test('nba should be able to expand beyond 20 items', async ({ page }) => {
+    test('nba should not expand beyond 20 items', async ({ page }) => {
       const sportsTab = page.locator('.category-tab[data-category="sports"]');
       if ((await sportsTab.count()) === 0) return;
       await sportsTab.click();
@@ -59,7 +59,7 @@ test.describe('News Viewer Page', () => {
       const visible = card.locator('.news-item:not(.paged-hidden)');
       await expect
         .poll(async () => await visible.count())
-        .toBeGreaterThan(20);
+        .toBeLessThanOrEqual(20);
     });
 
     test('should display news items in platform cards', async () => {
@@ -128,7 +128,7 @@ test.describe('News Viewer Page', () => {
       await expect(firstNewsCheckbox).toBeChecked();
     });
 
-    test('should autofill more items when filtered items cause blank space', async ({ page }) => {
+    test('should not autofill beyond 20 items when filtered items cause blank space', async ({ page }) => {
       await page.evaluate(() => {
         const card = document.querySelector('.platform-card') as HTMLElement | null;
         if (!card) throw new Error('no platform-card');
@@ -161,7 +161,7 @@ test.describe('News Viewer Page', () => {
         // @ts-ignore
         window.TrendRadar.paging.applyPagingToCard(card, 0);
 
-        // 再触发自动补全
+        // 再触发自动补全（但不应突破 20 的分页窗口上限）
         // @ts-ignore
         window.TrendRadar.paging.autofillCard(card, { minVisible: 10, maxSteps: 5 });
       });
@@ -171,6 +171,12 @@ test.describe('News Viewer Page', () => {
       await expect
         .poll(async () => await visible.count())
         .toBeGreaterThanOrEqual(10);
+
+      await expect
+        .poll(async () => {
+          return await card.locator('.news-item:not(.paged-hidden)').count();
+        })
+        .toBeLessThanOrEqual(20);
     });
   });
 

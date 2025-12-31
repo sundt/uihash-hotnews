@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FT中文网 - 阅读风格</title>
+    <style>
+        /* --- 全局重置与阅读背景 --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            /* 阅读友好背景：暖米白色 + 极细微噪点 */
+            background: 
+                linear-gradient(rgba(250, 248, 243, 0.9), rgba(250, 248, 243, 0.9)),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+            color: #333;
+            font-size: 14px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px 60px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.78); /* 半透明白 */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 18px;
+            box-shadow: 0 10px 32px rgba(100, 100, 120, 0.12);
+            overflow: hidden;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            margin-bottom: 22px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(200, 195, 185, 0.3);
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 19px;
+            font-weight: 700;
+            color: #2a2a2a;
+            letter-spacing: -0.3px;
+        }
+
+        .header span {
+            font-size: 12px;
+            color: #7a756a;
+        }
+
+        .news-list {
+            list-style: none;
+        }
+
+        .news-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 4px;
+            border-bottom: 1px solid rgba(230, 228, 220, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+        }
+
+        .news-item:hover {
+            background-color: rgba(250, 248, 243, 0.6);
+            border-radius: 10px;
+            border-bottom: none;
+            margin: 0 -4px;
+            padding: 8px 8px;
+            cursor: pointer;
+        }
+
+        .news-index {
+            font-family: "Menlo", "Monaco", "Consolas", monospace;
+            font-size: 13px;
+            color: #8a857b;
+            width: 30px;
+            text-align: right;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .news-item:nth-child(-n+3) .news-index {
+            color: #c25d00;
+            font-weight: bold;
+        }
+
+        .news-title {
+            font-size: 14.5px;
+            color: #2c2a26;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 400;
+        }
+
+        .news-item:hover .news-title {
+            color: #0066cc;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 20px 12px 40px;
+            }
+            .container {
+                padding: 20px;
+                border-radius: 16px;
+            }
+            .news-title {
+                white-space: normal;
+                font-size: 15px;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+            }
+            .news-item {
+                padding: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>FT中文网 · 深度快讯</h1>
+        <span>2025年12月29日 · 20条更新</span>
+    </div>
+
+    <ul class="news-list">
+        <li class="news-item"><span class="news-index">1</span><div class="news-title">沙特空袭阿联酋支持的也门派系，中东局势再度紧张</div></li>
+        <li class="news-item"><span class="news-index">2</span><div class="news-title">调查显示：欧元区增长前景在很大程度上取决于德国支出热潮能否持续</div></li>
+        <li class="news-item"><span class="news-index">3</span><div class="news-title">AI“世界模型”有望重塑游戏行业，开发者成本或降低40%</div></li>
+        <li class="news-item"><span class="news-index">4</span><div class="news-title">字节跳动计划明年投入1600亿元人民币资本支出，重点用于AI基础设施建设</div></li>
+        <li class="news-item"><span class="news-index">5</span><div class="news-title">围绕关税和供应短缺的担忧推动铜价创新高，市场情绪持续紧绷</div></li>
+        <li class="news-item"><span class="news-index">6</span><div class="news-title">英国央行降息0.25点至3.75%，同时预告降息前景将愈发难测</div></li>
+        <li class="news-item"><span class="news-index">7</span><div class="news-title">美联储官员暗示今年可能再降息一次，通胀数据成关键变量</div></li>
+        <li class="news-item"><span class="news-index">8</span><div class="news-title">全球芯片短缺缓解，但高端AI芯片仍供不应求，英伟达股价再创新高</div></li>
+        <li class="news-item"><span class="news-index">9</span><div class="news-title">日本央行维持利率不变，日元汇率承压跌破关键支撑位</div></li>
+        <li class="news-item"><span class="news-index">10</span><div class="news-title">欧盟拟对大型科技公司征收数字服务税，谷歌苹果恐面临巨额罚单</div></li>
+        <li class="news-item"><span class="news-index">11</span><div class="news-title">特斯拉上海工厂产能突破新高，Model Y成最畅销车型</div></li>
+        <li class="news-item"><span class="news-index">12</span><div class="news-title">中国新能源汽车出口量同比增长超200%，欧洲市场成为主要增长点</div></li>
+        <li class="news-item"><span class="news-index">13</span><div class="news-title">苹果Vision Pro开发者套件开始发货，首批应用生态初具规模</div></li>
+        <li class="news-item"><span class="news-index">14</span><div class="news-title">Meta发布新一代AI大模型Llama 3，性能对标GPT-4</div></li>
+        <li class="news-item"><span class="news-index">15</span><div class="news-title">全球气候峰会达成新减排协议，各国承诺加速淘汰化石燃料</div></li>
+        <li class="news-item"><span class="news-index">16</span><div class="news-title">SpaceX成功发射第30批星链卫星，全球覆盖率进一步提升</div></li>
+        <li class="news-item"><span class="news-index">17</span><div class="news-title">人民币国际化进程加速，跨境支付占比提升至历史新高</div></li>
+        <li class="news-item"><span class="news-index">18</span><div class="news-title">全球粮食价格指数创两年新高，联合国警告粮食危机风险</div></li>
+        <li class="news-item"><span class="news-index">19</span><div class="news-title">OpenAI推出企业级AI安全工具，旨在解决数据隐私担忧</div></li>
+        <li class="news-item"><span class="news-index">20</span><div class="news-title">全球首例AI辅助心脏手术成功实施，医疗科技迎来新突破</div></li>
+    </ul>
+</div>
+
+</body>
+</html>

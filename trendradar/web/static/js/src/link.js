@@ -30,12 +30,18 @@ export const link = {
         if (!item) return;
 
         const checkbox = item.querySelector('.news-checkbox');
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            if (typeof window.markAsRead === 'function') {
-                window.markAsRead(checkbox);
-            } else if (TR.readState && typeof TR.readState.markAsRead === 'function') {
-                TR.readState.markAsRead(checkbox);
+        if (checkbox) {
+            if (!checkbox.checked) {
+                checkbox.checked = true;
+                if (typeof window.markAsRead === 'function') {
+                    window.markAsRead(checkbox);
+                } else if (TR.readState && typeof TR.readState.markAsRead === 'function') {
+                    TR.readState.markAsRead(checkbox);
+                }
+            }
+        } else {
+            if (TR.readState && typeof TR.readState.markItemAsRead === 'function') {
+                TR.readState.markItemAsRead(item);
             }
         }
 

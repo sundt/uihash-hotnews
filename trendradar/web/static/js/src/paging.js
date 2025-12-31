@@ -18,13 +18,15 @@ export const paging = {
     getCardPageSize(card) {
         const raw = card?.dataset?.pageSize;
         const n = parseInt(raw || '', 10);
-        return Number.isFinite(n) && n > 0 ? n : CATEGORY_PAGE_SIZE;
+        const base = Number.isFinite(n) && n > 0 ? n : CATEGORY_PAGE_SIZE;
+        return Math.min(CATEGORY_PAGE_SIZE, Math.max(1, base));
     },
 
     setCardPageSize(card, pageSize) {
         if (!card) return;
-        const n = Math.max(CATEGORY_PAGE_SIZE, parseInt(String(pageSize || ''), 10) || CATEGORY_PAGE_SIZE);
-        card.dataset.pageSize = String(n);
+        const n = parseInt(String(pageSize || ''), 10);
+        const safe = Number.isFinite(n) && n > 0 ? n : CATEGORY_PAGE_SIZE;
+        card.dataset.pageSize = String(Math.min(CATEGORY_PAGE_SIZE, Math.max(1, safe)));
     },
 
     applyPagingToCard(card, offset) {
@@ -103,12 +105,22 @@ export const paging = {
         let pageSize = this.getCardPageSize(card);
         let changed = false;
 
+        // Keep page size stable (<= CATEGORY_PAGE_SIZE). If there is blank space due to
+        // filters/read/search hiding items, advance the paging window instead of enlarging it.
+        let curOffset = Math.max(0, offset);
+
         for (let i = 0; i < maxSteps; i++) {
             if (!force && !this.shouldAutofillCard(card, minVisible)) break;
-            if (offset + pageSize >= total) break;
-            pageSize = Math.min(total - offset, pageSize + AUTOFILL_STEP);
+            if (total <= pageSize) break;
+
+            // Move to next page window. Loop back to 0 when reaching the end.
+            let nextOffset = curOffset + pageSize;
+            if (nextOffset + pageSize > total) nextOffset = 0;
+            if (nextOffset === curOffset) break;
+
+            curOffset = nextOffset;
             this.setCardPageSize(card, pageSize);
-            this.applyPagingToCard(card, offset);
+            this.applyPagingToCard(card, curOffset);
             changed = true;
         }
         if (changed) TR.counts.updateAllCounts();

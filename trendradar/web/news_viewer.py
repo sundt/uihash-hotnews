@@ -71,6 +71,12 @@ PLATFORM_CATEGORIES = {
             "cankaoxiaoxi", "zaobao", "tencent-hot"
         ]
     },
+    "ai": {
+        "name": "AI资讯",
+        "icon": "🤖",
+        "news_limit": 10,
+        "platforms": [],
+    },
     "finance": {
         "name": "财经投资",
         "icon": "💰",
@@ -125,7 +131,8 @@ PLATFORM_CATEGORIES = {
 }
 
 # 分类显示顺序（用户期望的顺序）
-CATEGORY_ORDER = ['social', 'general', 'finance', 'tech_news', 'developer', 'sports', 'knowledge', 'other']
+# Note: "explore" is injected by server.py and will always be the first tab.
+CATEGORY_ORDER = ['ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'knowledge', 'other']
 
 
 class NewsViewerService:
@@ -360,9 +367,10 @@ class NewsViewerService:
             categories[cat_id]["filtered_count"] += 1
 
         # 移除空分类
+        keep_empty = {"ai"}
         categories = {
             k: v for k, v in categories.items() 
-            if v["news_count"] > 0 or v["filtered_count"] > 0
+            if (k in keep_empty) or v["news_count"] > 0 or v["filtered_count"] > 0
         }
 
         # Ensure platforms are ordered by configured category platform list.

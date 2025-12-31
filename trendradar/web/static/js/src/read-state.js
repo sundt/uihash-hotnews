@@ -94,6 +94,30 @@ export const readState = {
         this.updateReadCount();
     },
 
+    markItemAsRead(item) {
+        try {
+            if (!item) return;
+            const newsId = item.dataset.newsId;
+            const newsTitle = item.dataset.newsTitle || '';
+            if (!newsId) return;
+
+            item.classList.add('read');
+            const reads = this.getReadNews();
+            if (!reads[newsId]) {
+                reads[newsId] = {
+                    title: String(newsTitle || '').substring(0, 50),
+                    readAt: Date.now()
+                };
+                this.saveReadNews(reads);
+            }
+
+            TR.counts.updatePlatformCount(item.closest('.platform-card'));
+            this.updateReadCount();
+        } catch (e) {
+            // ignore
+        }
+    },
+
     updateReadCount() {
         const reads = this.getReadNews();
         const countEl = document.getElementById('readCount');

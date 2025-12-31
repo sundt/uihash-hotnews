@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
+    <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}" as="script">
     <!-- 早期隐藏脚本：在 DOM 解析前检测用户配置，防止栏目闪烁 -->
     <script>
@@ -26,7 +27,7 @@
     <!-- 关键 CSS 内联（骨架屏样式，防止 FOUC） -->
     <style>
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-        .main-container { max-width: 1400px; margin: 0 auto; padding: 24px 15px; }
+        .main-container { width: 96vw; max-width: 1600px; margin: 0 auto; padding: 24px 15px; box-sizing: border-box; }
         .header-card { background: white; border-radius: 12px; padding: 12px 15px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .category-tabs { display: flex; gap: 8px; flex-wrap: wrap; background: white; border-radius: 12px; padding: 10px; margin-bottom: 10px; }
         .category-tab { padding: 8px 16px; border-radius: 8px; background: #f3f4f6; cursor: pointer; }
@@ -36,6 +37,7 @@
         @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" rel="stylesheet">
     <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
 </head>
 <body>
@@ -56,15 +58,6 @@
                 <button class="category-settings-btn" onclick="openCategorySettings()">
                     ⚙️ 栏目设置 <span class="new-badge" id="categorySettingsNewBadge">NEW</span>
                 </button>
-                <button class="category-settings-btn" onclick="openRssSubscriptionModal()">
-                    🧩 RSS订阅 <span class="new-badge" id="rssSubscriptionNewBadge">NEW</span>
-                </button>
-                <button class="category-settings-btn" onclick="openRssCatalogPreviewModal()">
-                    🔎 预览RSS
-                </button>
-                <button class="show-read-btn" id="showReadBtn" onclick="toggleShowRead()">
-                    👁 已读: <span id="readCount">0</span>
-                </button>
                 <button class="filter-toggle-btn" type="button" onclick="window.open('https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe', '_blank')">
                     💡 建议
                 </button>
@@ -81,8 +74,11 @@
 
         <!-- Tabs -->
         <div class="category-tabs">
+            {% set ns = namespace(active_set=false) %}
             {% for cat_id, category in data.categories.items() %}
-            <div class="category-tab {% if loop.first %}active{% endif %}" 
+            {% set is_active = (not ns.active_set) and (cat_id != 'explore') %}
+            {% if is_active %}{% set ns.active_set = true %}{% endif %}
+            <div class="category-tab {% if is_active %}active{% endif %}" 
                  data-category="{{ cat_id }}"
                  draggable="false"
                  onclick="switchTab('{{ cat_id }}')">
@@ -95,11 +91,16 @@
 
         <!-- Content -->
         <div class="tab-content-area">
+            {% set ns2 = namespace(active_set=false) %}
             {% for cat_id, category in data.categories.items() %}
-            {% set is_active_category = loop.first %}
-            <div class="tab-pane {% if loop.first %}active{% endif %}" id="tab-{{ cat_id }}">
+            {% set is_active_category = (not ns2.active_set) and (cat_id != 'explore') %}
+            {% if is_active_category %}{% set ns2.active_set = true %}{% endif %}
+            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}">
+                {% if cat_id == 'explore' %}
+                <div class="platform-grid" id="trExploreGrid"></div>
+                {% else %}
                 <div class="platform-grid">
-                    {% for platform_id, platform in category.platforms.items() %}
+                    {% for platform_id, platform in (category.platforms.items()|list)[:3] %}
                     <div class="platform-card" data-platform="{{ platform_id }}" data-total-count="{{ platform.news|length }}" data-loaded-count="{% if is_active_category %}{{ [platform.news|length, 20]|min }}{% else %}0{% endif %}" draggable="false">
                         <div class="platform-header">
                             <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
@@ -114,7 +115,6 @@
                                 {% for news in platform.news[:20] %}
                                 <li class="news-item" data-news-id="{{ news.stable_id }}" data-news-title="{{ news.display_title or news.title }}">
                                     <div class="news-item-content">
-                                        <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
                                         <span class="news-index">{{ loop.index }}</span>
                                         <a class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                                             {{ news.display_title or news.title }}
@@ -137,6 +137,7 @@
                     {% endfor %}
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

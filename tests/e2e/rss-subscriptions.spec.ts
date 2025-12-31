@@ -12,11 +12,32 @@ test.describe('RSS Subscriptions', () => {
     });
 
     await page.route('**/api/me/rss-subscriptions', async (route) => {
-      await route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Not allowlisted' }),
-      });
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: [] }),
+        });
+        return;
+      }
+      if (method === 'PUT') {
+        const bodyRaw = route.request().postData() || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(bodyRaw);
+        } catch (e) {
+          parsed = null;
+        }
+        const subs = Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: subs }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: 'Method Not Allowed' });
     });
   });
 
@@ -95,17 +116,15 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-      });
-    });
-
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await expect(page.locator('.category-tabs .category-tab[data-category="rsscol-rss"]')).toHaveCount(0);
+
+    await page.evaluate(() => {
+      // UI button removed; keep feature testable via programmatic open.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     await expect(page.locator('#rssSubscriptionModal')).toBeVisible();
 
     const saveBtn = page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")');
@@ -117,7 +136,7 @@ test.describe('RSS Subscriptions', () => {
     await page.locator('#rssSourceResults .rss-source-item').first().click();
     await expect(page.locator('#rssSourcePickerModal')).toBeHidden();
 
-    await page.locator('button:has-text("预览")').click();
+    await page.locator('#rssSubscriptionModal button:has-text("预览")').click();
 
     await expect(page.locator('#rssSubscriptionList')).not.toContainText(feedUrl);
     await expect(saveBtn).toBeDisabled();
@@ -141,14 +160,6 @@ test.describe('RSS Subscriptions', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ queued: 1, results: [] }),
-      });
-    });
-
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
       });
     });
 
@@ -192,7 +203,10 @@ test.describe('RSS Subscriptions', () => {
 
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     await expect(page.locator('#rssSubscriptionModal')).toBeVisible();
 
     await page.locator('button:has-text("选择RSS源")').click();
@@ -211,17 +225,70 @@ test.describe('RSS Subscriptions', () => {
     const platformId = `rss-${sourceId}`;
 
     const warmupCalls: Array<{ url: string; body: any }> = [];
+    let savedSubs: any[] = [];
+    let newsCalls = 0;
 
-    let rssNewsCalls = 0;
+    await page.unroute('**/api/me/rss-subscriptions');
+    await page.route('**/api/me/rss-subscriptions', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: savedSubs }),
+        });
+        return;
+      }
+      if (method === 'PUT') {
+        const bodyRaw = route.request().postData() || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(bodyRaw);
+        } catch (e) {
+          parsed = null;
+        }
+        savedSubs = Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: savedSubs }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: 'Method Not Allowed' });
+    });
 
     await page.route('**/api/news', async (route) => {
+      newsCalls += 1;
+      const includeRss = savedSubs.length > 0 && newsCalls >= 3;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           updated_at: '2030-01-01 00:00:00',
           categories: {
-            nba: { name: 'NBA', icon: '🏀', platforms: {} },
+            nba: {
+              name: 'NBA',
+              icon: '🏀',
+              platforms: includeRss
+                ? {
+                    [platformId]: {
+                      id: platformId,
+                      name: 'Example Feed',
+                      is_new: false,
+                      news: [
+                        {
+                          stable_id: 'rss-12345678-aaaaaaa1',
+                          display_title: 'Item 1',
+                          title: 'Item 1',
+                          url: 'https://example.com/1',
+                          meta: '',
+                        },
+                      ],
+                    },
+                  }
+                : {},
+            },
           },
         }),
       });
@@ -332,72 +399,12 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      rssNewsCalls += 1;
-      const req = route.request();
-      const bodyRaw = req.postData() || '';
-      let parsed: any = null;
-      try {
-        parsed = JSON.parse(bodyRaw);
-      } catch (e) {
-        parsed = null;
-      }
-
-      const subs = Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [];
-      if (subs.length === 0) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-        });
-        return;
-      }
-
-      expect(subs[0]?.source_id || subs[0]?.rss_source_id).toBe(sourceId);
-
-      // First refresh after saving subscription may happen before warmup writes to DB.
-      // Return empty data once so the UI keeps a visible "同步中..." pending state.
-      if (rssNewsCalls === 1) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-        });
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          updated_at: '2030-01-01 00:00:00',
-          categories: {
-            'rsscol-rss': {
-              name: 'RSS',
-              icon: '📰',
-              platforms: {
-                [platformId]: {
-                  name: 'Example Feed',
-                  news: [
-                    {
-                      stable_id: 'rss-12345678-aaaaaaa1',
-                      display_title: 'Item 1',
-                      title: 'Item 1',
-                      url: 'https://example.com/1',
-                      meta: 'Tue, 01 Jan 2030 00:00:00 GMT',
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }),
-      });
-    });
-
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     await expect(page.locator('#rssSubscriptionModal')).toBeVisible();
 
     await expect(page.locator('#rssSelectedSourceId')).toHaveValue('');
@@ -412,7 +419,7 @@ test.describe('RSS Subscriptions', () => {
     await page.locator('#rssSourceResults .rss-source-item').first().click();
     await expect(page.locator('#rssSourcePickerModal')).toBeHidden();
     await expect(page.locator('#rssSelectedSourceId')).toHaveValue(sourceId);
-    await page.locator('button:has-text("预览")').click();
+    await page.locator('#rssSubscriptionModal button:has-text("预览")').click();
     await expect(page.locator('#rssSubscriptionPreview')).toContainText('Example Feed');
     await expect(page.locator('#rssSubscriptionList')).toContainText(feedUrl);
 
@@ -429,11 +436,13 @@ test.describe('RSS Subscriptions', () => {
     });
     expect(sawHighWarmup).toBeTruthy();
 
-    await expect(page.locator('.category-tabs .category-tab:has-text("RSS")')).toBeVisible({ timeout: 15000 });
-    await page.locator('.category-tabs .category-tab:has-text("RSS")').click();
+    // RSS tab should NOT exist
+    await expect(page.locator('.category-tabs .category-tab[data-category="rsscol-rss"]')).toHaveCount(0);
 
-    await expect(page.locator('#tab-rsscol-rss .platform-card')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#tab-rsscol-rss .platform-card')).toContainText('Example Feed');
+    // RSS platform card should be merged into nba tab
+    await expect(page.locator('#tab-nba .platform-card')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`#tab-nba .platform-card[data-platform="${platformId}"]`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`#tab-nba .platform-card[data-platform="${platformId}"]`)).toContainText('Example Feed');
 
     await viewerPage.openCategorySettings();
 
@@ -528,17 +537,12 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-      });
-    });
-
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     await expect(page.locator('#rssSubscriptionModal')).toBeVisible();
 
     await page.locator('button:has-text("选择RSS源")').click();
@@ -547,7 +551,7 @@ test.describe('RSS Subscriptions', () => {
     await page.locator('#rssSourceResults .rss-source-item').first().click();
     await expect(page.locator('#rssSourcePickerModal')).toBeHidden();
 
-    await page.locator('button:has-text("预览")').click();
+    await page.locator('#rssSubscriptionModal button:has-text("预览")').click();
     await expect(page.locator('#rssSubscriptionList')).toContainText(feedUrl);
 
     await page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")').click();
@@ -564,7 +568,7 @@ test.describe('RSS Subscriptions', () => {
         source_id: `rsssrc-${String(i).padStart(12, '0')}`,
         url: `https://example.com/${i}.xml`,
         feed_title: '',
-        column: 'RSS',
+        column: 'general',
         platform_id: ''
       };
     });
@@ -586,146 +590,26 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    let warmupGateResolve: undefined | (() => void);
-    const warmupGate = new Promise<void>((resolve) => {
-      warmupGateResolve = resolve;
-    });
-
+    let warmupCalls = 0;
     await page.route('**/api/rss-sources/warmup?*', async (route) => {
-      const bodyRaw = route.request().postData() || '';
-      let parsed: any = null;
-      try {
-        parsed = JSON.parse(bodyRaw);
-      } catch (e) {
-        parsed = null;
-      }
-      const ids = Array.isArray(parsed?.source_ids) ? parsed.source_ids : [];
-      expect(ids.length).toBeLessThanOrEqual(25);
-
-      // Simulate slow warmup endpoint; refresh SHOULD NOT wait for this.
-      await warmupGate;
-
+      warmupCalls += 1;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ queued: ids.length, results: [] }),
-      });
-    });
-
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      const bodyRaw = route.request().postData() || '';
-      let parsed: any = null;
-      try {
-        parsed = JSON.parse(bodyRaw);
-      } catch (e) {
-        parsed = null;
-      }
-      const got = Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [];
-      expect(got.length).toBeLessThanOrEqual(25);
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
+        body: JSON.stringify({ queued: 0, results: [] }),
       });
     });
 
     await viewerPage.goto();
 
-    const rssNewsReqPromise = page.waitForRequest('**/api/subscriptions/rss-news*');
     const elapsedPromise = page.evaluate(async () => {
       const t0 = Date.now();
       await (window as any).refreshViewerData({ preserveScroll: true });
       return Date.now() - t0;
     });
-
-    await rssNewsReqPromise;
     const elapsedMs = await elapsedPromise;
     expect(elapsedMs).toBeLessThan(1500);
 
-    warmupGateResolve?.();
-    await page.waitForResponse('**/api/rss-sources/warmup?*');
-  });
-
-  test('should prefer server mode when allowlisted (mode=server, no payload subscriptions)', async ({ page }) => {
-    await page.unroute('**/api/me/rss-subscriptions');
-    await page.route('**/api/me/rss-subscriptions', async (route) => {
-      const method = route.request().method();
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            subscriptions: [
-              { source_id: 'rsssrc-allowlisted', feed_title: 'Allowlisted Feed', column: 'RSS', platform_id: '' },
-            ],
-          }),
-        });
-        return;
-      }
-      if (method === 'PUT') {
-        const bodyRaw = route.request().postData() || '';
-        let parsed: any = null;
-        try { parsed = JSON.parse(bodyRaw); } catch (e) { parsed = null; }
-        const subs = parsed?.subscriptions || [];
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ subscriptions: subs }),
-        });
-        return;
-      }
-      await route.fulfill({ status: 405, body: 'Method Not Allowed' });
-    });
-
-    await page.route('**/api/news', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-      });
-    });
-
-    await page.route('**/api/rss-source-categories', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ categories: [{ id: '', name: '全部', count: 0 }] }),
-      });
-    });
-
-    await page.route('**/api/rss-sources/search?*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ sources: [], total: 0, limit: 80, offset: 0, next_offset: null }),
-      });
-    });
-
-    let sawServerMode = false;
-    let sawPayloadSubs = false;
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      const url = route.request().url();
-      const bodyRaw = route.request().postData() || '';
-      sawServerMode = sawServerMode || url.includes('mode=server');
-      sawPayloadSubs = sawPayloadSubs || bodyRaw.includes('subscriptions');
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-      });
-    });
-
-    await viewerPage.goto();
-
-    const meRespPromise = page.waitForResponse('**/api/me/rss-subscriptions');
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
-    await meRespPromise;
-
-    await page.evaluate(async () => {
-      await (window as any).refreshViewerData({ preserveScroll: true });
-    });
-
-    expect(sawServerMode).toBeTruthy();
-    expect(sawPayloadSubs).toBeFalsy();
+    expect(warmupCalls).toBe(0);
   });
 });

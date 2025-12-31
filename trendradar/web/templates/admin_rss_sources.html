@@ -142,8 +142,14 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>Name</th>
-            <th>URL</th>
+            <th>标题</th>
+            <th>订阅地址</th>
+            <th>最后更新</th>
+            <th>分类</th>
+            <th>类型</th>
+            <th>国家</th>
+            <th>语言</th>
+            <th>来源</th>
             <th>Subscribed</th>
             <th>Added</th>
             <th>Entries</th>
@@ -156,8 +162,14 @@
           {% for s in sources %}
           <tr>
             <td class="muted">{{ s.id }}</td>
-            <td><b>{{ s.name }}</b></td>
-            <td style="max-width:640px; word-break:break-all;" class="muted">{{ s.url }}</td>
+            <td style="max-width:240px; word-break:break-word;"><b>{{ s.name }}</b></td>
+            <td style="max-width:520px; word-break:break-all;" class="muted">{{ s.url }}</td>
+            <td class="muted">{{ s.last_updated_time or '' }}</td>
+            <td class="muted">{{ s.category or '' }}</td>
+            <td class="muted">{{ s.feed_type or '' }}</td>
+            <td class="muted">{{ s.country or '' }}</td>
+            <td class="muted">{{ s.language or '' }}</td>
+            <td class="muted">{{ s.source or '' }}</td>
             <td class="muted">{{ s.subscribed_count or 0 }}</td>
             <td class="muted">{{ s.added_count or 0 }}</td>
             <td class="muted">{{ s.entries_count or 0 }}</td>

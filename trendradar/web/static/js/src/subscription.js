@@ -323,7 +323,16 @@ async function _previewSource(sourceId) {
         try {
             const urlFromSelected = _selectedSource ? String(_selectedSource.url || '').trim() : '';
             const urlFinal = urlFromSelected || String(payload?.final_url || payload?.url || '').trim();
-            const column = _getInputValue('rssColumn') || 'RSS';
+            let column = _getInputValue('rssColumn') || '';
+            if (!column || String(column).trim().toUpperCase() === 'RSS') {
+                try {
+                    const activeTab = (TR.tabs && typeof TR.tabs.getActiveTabId === 'function') ? TR.tabs.getActiveTabId() : '';
+                    if (activeTab) column = String(activeTab);
+                } catch (e) {
+                    // ignore
+                }
+            }
+            if (!column) column = 'general';
             const feedTitleFinal = _getInputValue('rssFeedTitle') || String(_selectedSource?.name || _selectedSource?.host || '').trim();
 
             const subs = subscription.getSubscriptions();
@@ -903,6 +912,89 @@ export const subscription = {
         subs.splice(index, 1);
         this.setSubscriptions(subs);
         _renderList();
+    },
+
+    async saveOnly() {
+        try {
+            const prev = Array.isArray(_subsSnapshot) ? _subsSnapshot : [];
+            const next = this.getSubscriptions();
+
+            const changed = _subsKey(prev) !== _subsKey(next);
+            const newIdsForGate = _diffNewSourceIds(prev, next);
+            const allNewOk = newIdsForGate.every((sid) => {
+                const st = _previewStatusBySourceId.get(sid);
+                return !!st && st.ok === true && Number(st.entries_count || 0) > 0;
+            });
+            if (!changed) {
+                _setSaveStatus('请先通过预览加入至少一个订阅，再保存', { variant: 'info' });
+                _updateRssGatingUI();
+                return;
+            }
+            if (!allNewOk) {
+                _setSaveStatus('新增订阅需要先预览且必须有条目（entries>0）', { variant: 'info' });
+                _updateRssGatingUI();
+                return;
+            }
+
+            let savedNext = next;
+            try {
+                const resp = await fetch('/api/me/rss-subscriptions', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subscriptions: _normalizeSubsForServer(next) })
+                });
+                if (resp.status === 403) {
+                    _serverChecked = true;
+                    _serverEnabled = false;
+                    try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+                    _setSaveStatus('未开启服务端同步（Not allowlisted），已保存到本地订阅', { variant: 'info' });
+                } else {
+                    const payload = await resp.json().catch(() => ({}));
+                    if (!resp.ok) throw new Error(payload?.detail || 'Save failed');
+                    savedNext = _normalizeSubsForServer(payload?.subscriptions);
+                    _serverChecked = true;
+                    _serverEnabled = true;
+                    try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+                    this.setSubscriptions(savedNext);
+                }
+            } catch (e) {
+                _setSaveStatus(`服务端保存失败，已使用本地订阅：${String(e?.message || e)}`, { variant: 'info' });
+            }
+
+            const prevSet = new Set(prev.map((s) => String(s?.source_id || s?.rss_source_id || '').trim()).filter(Boolean));
+            const newIds = savedNext
+                .map((s) => String(s?.source_id || s?.rss_source_id || '').trim())
+                .filter((sid) => !!sid && !prevSet.has(sid));
+
+            if (newIds.length > 0) {
+                _setPendingSync(newIds, true);
+                _renderList();
+            }
+            if (newIds.length > 0) {
+                try {
+                    await fetch('/api/rss-sources/warmup?wait_ms=0', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source_ids: newIds, priority: 'high' })
+                    });
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+            try {
+                _subsSnapshot = this.getSubscriptions();
+            } catch (e) {
+                _subsSnapshot = null;
+            }
+            _renderList();
+            _updateRssGatingUI();
+        } catch (e) {
+            console.error('rss save error:', e);
+            try {
+                _setSaveStatus(String(e?.message || e), { variant: 'error' });
+            } catch (_) {}
+        }
     },
 
     async saveAndRefresh() {

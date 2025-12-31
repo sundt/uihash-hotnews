@@ -29,6 +29,7 @@ function normalizeCategoryConfig(config) {
     const base = config && typeof config === 'object' ? config : {};
     if (!Array.isArray(base.customCategories)) base.customCategories = [];
     if (!Array.isArray(base.hiddenDefaultCategories)) base.hiddenDefaultCategories = [];
+    if (!Array.isArray(base.hiddenPlatforms)) base.hiddenPlatforms = [];
     if (!Array.isArray(base.categoryOrder)) base.categoryOrder = [];
     if (!base.platformOrder || typeof base.platformOrder !== 'object') base.platformOrder = {};
     ensureCategoryFilters(base);
@@ -66,6 +67,7 @@ export const settings = {
             const maxAge = 365 * 24 * 60 * 60;
             const hasCustom = (config.customCategories?.length > 0) ||
                              (config.hiddenDefaultCategories?.length > 0) ||
+                             (config.hiddenPlatforms?.length > 0) ||
                              (config.categoryOrder?.length > 0);
 
             if (hasCustom) {
@@ -104,6 +106,7 @@ export const settings = {
             version: CATEGORY_CONFIG_VERSION,
             customCategories: [],
             hiddenDefaultCategories: [],
+            hiddenPlatforms: [],
             categoryOrder: Object.keys(_defaultCategories),
             platformOrder: {},
             categoryFilters: {}
@@ -119,6 +122,7 @@ export const settings = {
             ...defaultConfig,
             customCategories: userConfig.customCategories || [],
             hiddenDefaultCategories: userConfig.hiddenDefaultCategories || [],
+            hiddenPlatforms: userConfig.hiddenPlatforms || [],
             categoryOrder: userConfig.categoryOrder || defaultConfig.categoryOrder,
             platformOrder: userConfig.platformOrder || {},
             categoryFilters: userConfig.categoryFilters || {}
@@ -136,6 +140,14 @@ export const settings = {
             }
         });
 
+        try {
+            if (Array.isArray(merged.categoryOrder) && !merged.categoryOrder.includes('explore')) {
+                merged.categoryOrder.unshift('explore');
+            }
+        } catch (e) {
+            // ignore
+        }
+
         return merged;
     },
 
@@ -145,6 +157,39 @@ export const settings = {
 
     getAllPlatforms() {
         return _allPlatforms;
+    },
+
+    addPlatformToCustomCategory(customCategoryId, platformId) {
+        const catId = String(customCategoryId || '').trim();
+        const pid = String(platformId || '').trim();
+        if (!catId || !pid) return false;
+
+        const config = this.getCategoryConfig() || this.getDefaultCategoryConfig();
+        ensureCategoryFilters(config);
+
+        const idx = Array.isArray(config.customCategories)
+            ? config.customCategories.findIndex((c) => String(c?.id || '').trim() === catId)
+            : -1;
+        if (idx < 0) return false;
+
+        const cat = config.customCategories[idx] || {};
+        const platforms = Array.isArray(cat.platforms) ? [...cat.platforms] : [];
+        if (!platforms.includes(pid)) {
+            platforms.push(pid);
+        }
+
+        config.customCategories[idx] = {
+            ...cat,
+            platforms
+        };
+
+        if (Array.isArray(config.categoryOrder) && !config.categoryOrder.includes(catId)) {
+            config.categoryOrder.unshift(catId);
+        }
+
+        this.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        return true;
     },
 
     setDefaultCategories(categories) {
@@ -352,6 +397,25 @@ export const settings = {
         this.renderCategoryList();
     },
 
+    togglePlatformHidden(platformId) {
+        const pid = String(platformId || '').trim();
+        if (!pid) return false;
+        const config = this.getCategoryConfig() || this.getDefaultCategoryConfig();
+        if (!Array.isArray(config.hiddenPlatforms)) config.hiddenPlatforms = [];
+
+        const idx = config.hiddenPlatforms.findIndex((x) => String(x || '').trim() === pid);
+        if (idx >= 0) {
+            config.hiddenPlatforms.splice(idx, 1);
+        } else {
+            config.hiddenPlatforms.push(pid);
+        }
+
+        this.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        this.applyCategoryConfig();
+        return true;
+    },
+
     showAddCategoryPanel() {
         _isAddingNew = true;
         _editingCategoryId = null;
@@ -427,15 +491,21 @@ export const settings = {
     renderPlatformSelectList(selectedPlatforms, isCustomCategory = false) {
         const container = document.getElementById('platformSelectList');
 
-        const allPlatformIds = Object.keys(_allPlatforms);
+        const merged = this.getMergedCategoryConfig();
+        const hiddenPlatforms = (merged.hiddenPlatforms || []).map((x) => String(x || '').trim()).filter(Boolean);
+        const hiddenSet = new Set(hiddenPlatforms);
 
         const sortedPlatforms = [];
         selectedPlatforms.forEach(pid => {
             if (_allPlatforms[pid]) sortedPlatforms.push(pid);
         });
-        allPlatformIds.forEach(pid => {
-            if (!sortedPlatforms.includes(pid)) sortedPlatforms.push(pid);
-        });
+
+        if (isCustomCategory) {
+            const allPlatformIds = Object.keys(_allPlatforms);
+            allPlatformIds.forEach(pid => {
+                if (!sortedPlatforms.includes(pid)) sortedPlatforms.push(pid);
+            });
+        }
 
         const query = (_platformSearchQuery || '').trim().toLowerCase();
         const visiblePlatforms = query
@@ -446,7 +516,7 @@ export const settings = {
 
         container.innerHTML = visiblePlatforms.map(pid => {
             const p = _allPlatforms[pid];
-            const isSelected = selectedPlatforms.includes(pid);
+            const isSelected = selectedPlatforms.includes(pid) && !hiddenSet.has(String(pid || '').trim());
             return `
                 <label class="platform-select-item ${isSelected ? 'selected' : ''} ${disableDrag ? 'no-drag' : ''}" data-platform-id="${pid}" draggable="${disableDrag ? 'false' : 'true'}">
                     <span class="drag-handle">☰</span>
@@ -532,17 +602,28 @@ export const settings = {
         return selected;
     },
 
+    getOrderedPlatforms() {
+        const items = document.querySelectorAll('.platform-select-item');
+        const ordered = [];
+        items.forEach(item => {
+            const pid = String(item?.dataset?.platformId || '').trim();
+            if (pid) ordered.push(pid);
+        });
+        return ordered;
+    },
+
     saveCategory() {
         const name = document.getElementById('editCategoryName').value.trim();
         const icon = '📱';
         const platforms = this.getSelectedPlatforms();
+        const orderedPlatforms = this.getOrderedPlatforms();
 
         if (!name) {
             alert('请输入栏目名称');
             return false;
         }
 
-        if (platforms.length === 0) {
+        if (!_isAddingNew && platforms.length === 0) {
             alert('请至少选择一个平台');
             return false;
         }
@@ -577,7 +658,19 @@ export const settings = {
                     platforms
                 };
             } else {
-                config.platformOrder[_editingCategoryId] = platforms;
+                config.platformOrder[_editingCategoryId] = orderedPlatforms;
+
+                if (!Array.isArray(config.hiddenPlatforms)) config.hiddenPlatforms = [];
+                const hiddenSet = new Set((config.hiddenPlatforms || []).map((x) => String(x || '').trim()).filter(Boolean));
+                orderedPlatforms.forEach((pid) => {
+                    if (!pid) return;
+                    if (platforms.includes(pid)) {
+                        hiddenSet.delete(pid);
+                    } else {
+                        hiddenSet.add(pid);
+                    }
+                });
+                config.hiddenPlatforms = Array.from(hiddenSet);
             }
 
             config.categoryFilters[_editingCategoryId] = {
@@ -608,6 +701,44 @@ export const settings = {
         this.saveCategoryConfig(config);
         _categoryConfigChanged = true;
         this.renderCategoryList();
+    },
+
+    resetDefaultCategoryConfig() {
+        if (!confirm('确定要初始化默认栏目与卡片吗？自定义栏目将保留。')) return;
+
+        const userConfig = this.getCategoryConfig();
+        if (!userConfig) {
+            this.renderCategoryList();
+            this.applyCategoryConfig();
+            return;
+        }
+
+        const defaultConfig = this.getDefaultCategoryConfig();
+        const defaultIds = Array.isArray(defaultConfig?.categoryOrder) ? defaultConfig.categoryOrder : [];
+        const defaultSet = new Set(defaultIds.map((x) => String(x || '').trim()).filter(Boolean));
+
+        const config = userConfig;
+
+        config.hiddenDefaultCategories = (config.hiddenDefaultCategories || []).filter((id) => !defaultSet.has(String(id || '').trim()));
+        config.hiddenPlatforms = [];
+        config.platformOrder = {};
+
+        // Reset category order back to current defaults, while preserving custom categories.
+        // This ensures changes in server-side default ordering take effect when user clicks "初始化".
+        const customIds = Array.isArray(config.customCategories)
+            ? config.customCategories.map((c) => String(c?.id || '').trim()).filter(Boolean)
+            : [];
+        const nextOrder = defaultIds.slice();
+        for (const cid of customIds) {
+            if (!nextOrder.includes(cid)) nextOrder.push(cid);
+        }
+        config.categoryOrder = nextOrder;
+
+        this.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+
+        this.renderCategoryList();
+        this.applyCategoryConfig();
     },
 
     resetCategoryConfig() {
@@ -668,6 +799,8 @@ export const settings = {
 
         const result = {};
         const hiddenCategories = merged.hiddenDefaultCategories || [];
+        const hiddenPlatforms = (merged.hiddenPlatforms || []).map((x) => String(x || '').trim()).filter(Boolean);
+        const hiddenPlatformSet = new Set(hiddenPlatforms);
         const categoryOrder = merged.categoryOrder || Object.keys(serverCategories);
         const customCategories = merged.customCategories || [];
         const platformOrder = merged.platformOrder || {};
@@ -675,10 +808,13 @@ export const settings = {
         categoryOrder.forEach(catId => {
             if (hiddenCategories.includes(catId)) return;
 
+            if (String(catId || '').startsWith('rsscol-')) return;
+
             const customCat = customCategories.find(c => c.id === catId);
             if (customCat) {
                 const platforms = {};
                 (customCat.platforms || []).forEach(pid => {
+                    if (hiddenPlatformSet.has(String(pid || '').trim())) return;
                     if (allPlatformData[pid]) {
                         platforms[pid] = allPlatformData[pid];
                     }
@@ -696,6 +832,7 @@ export const settings = {
                     const inOrder = [];
                     const inOrderSet = new Set();
                     userPlatformOrder.forEach(pid => {
+                        if (hiddenPlatformSet.has(String(pid || '').trim())) return;
                         if (serverCat.platforms && serverCat.platforms[pid]) {
                             inOrder.push(pid);
                             inOrderSet.add(pid);
@@ -706,6 +843,7 @@ export const settings = {
                     const otherMissing = [];
                     Object.keys(serverCat.platforms || {}).forEach(pid => {
                         if (inOrderSet.has(pid)) return;
+                        if (hiddenPlatformSet.has(String(pid || '').trim())) return;
                         if (String(pid || '').startsWith('rss-')) {
                             rssMissing.push(pid);
                         } else {
@@ -716,18 +854,25 @@ export const settings = {
                     const finalOrder = rssMissing.concat(inOrder, otherMissing);
                     const platforms = {};
                     finalOrder.forEach(pid => {
+                        if (hiddenPlatformSet.has(String(pid || '').trim())) return;
                         if (serverCat.platforms && serverCat.platforms[pid]) {
                             platforms[pid] = serverCat.platforms[pid];
                         }
                     });
                     result[catId] = { ...serverCat, platforms };
                 } else {
-                    result[catId] = serverCat;
+                    const platforms = {};
+                    Object.entries(serverCat.platforms || {}).forEach(([pid, p]) => {
+                        if (hiddenPlatformSet.has(String(pid || '').trim())) return;
+                        platforms[pid] = p;
+                    });
+                    result[catId] = { ...serverCat, platforms };
                 }
             }
         });
 
         Object.keys(serverCategories).forEach(catId => {
+            if (String(catId || '').startsWith('rsscol-') && String(catId) !== 'rsscol-rss') return;
             if (!result[catId] && !hiddenCategories.includes(catId)) {
                 result[catId] = serverCategories[catId];
             }
@@ -747,6 +892,7 @@ window.editCategory = (catId) => settings.editCategory(catId);
 window.cancelEditCategory = () => settings.cancelEditCategory();
 window.saveCategory = () => settings.saveCategory();
 window.deleteCategory = (catId) => settings.deleteCategory(catId);
+window.resetDefaultCategoryConfig = () => settings.resetDefaultCategoryConfig();
 window.resetCategoryConfig = () => settings.resetCategoryConfig();
 window.toggleCategoryVisibility = (catId) => settings.toggleCategoryVisibility(catId);
 window.toggleCategoryListCollapseInSettings = () => settings.toggleCategoryListCollapseInSettings();

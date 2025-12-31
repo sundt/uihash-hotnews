@@ -104,14 +104,6 @@ print('cleaned')
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
-      });
-    });
-
     await viewerPage.goto();
 
     const cookies = await context.cookies();
@@ -121,7 +113,10 @@ print('cleaned')
     const meGetResp = await page.request.get('/api/me/rss-subscriptions');
     expect(meGetResp.status()).toBe(200);
 
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     await expect(page.locator('#rssSubscriptionModal')).toBeVisible();
 
     await page.locator('button:has-text("选择RSS源")').click();
@@ -131,7 +126,7 @@ print('cleaned')
     await page.locator('#rssSourceResults .rss-source-item').first().click();
     await expect(page.locator('#rssSourcePickerModal')).toBeHidden();
 
-    await page.locator('button:has-text("预览")').click();
+    await page.locator('#rssSubscriptionModal button:has-text("预览")').click();
     await expect(page.locator('#rssSubscriptionList')).toContainText(feedUrl);
 
     const saveBtn = page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")');

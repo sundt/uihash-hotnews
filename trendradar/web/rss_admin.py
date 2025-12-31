@@ -21,6 +21,30 @@ def _now_ts() -> int:
     return int(datetime.now().timestamp())
 
 
+def _parse_ts_loose(v: Any) -> int:
+    try:
+        if v is None:
+            return 0
+        if isinstance(v, (int, float)):
+            return int(v)
+        s = str(v).strip()
+        if not s:
+            return 0
+        try:
+            return int(float(s))
+        except Exception:
+            pass
+
+        for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+            try:
+                return int(datetime.strptime(s, fmt).timestamp())
+            except Exception:
+                continue
+        return 0
+    except Exception:
+        return 0
+
+
 def _md5_hex(s: str) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()
 
@@ -852,7 +876,7 @@ async def admin_rss_sources_page(request: Request):
         latest_map = {}
 
     cur = conn.execute(
-        "SELECT id, name, url, host, category, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
+        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
     )
     src_rows = cur.fetchall() or []
     sources = []
@@ -865,6 +889,19 @@ async def admin_rss_sources_page(request: Request):
                 latest_str = datetime.fromtimestamp(latest_ts).strftime("%Y-%m-%d %H:%M")
             except Exception:
                 latest_str = str(latest_ts)
+
+        last_updated_ts = _parse_ts_loose(r[9])
+        if last_updated_ts <= 0:
+            try:
+                last_updated_ts = int(r[12] or 0)
+            except Exception:
+                last_updated_ts = 0
+        last_updated_str = ""
+        if last_updated_ts > 0:
+            try:
+                last_updated_str = datetime.fromtimestamp(last_updated_ts).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                last_updated_str = str(last_updated_ts)
         sources.append(
             {
                 "id": sid,
@@ -872,9 +909,15 @@ async def admin_rss_sources_page(request: Request):
                 "url": str(r[2] or ""),
                 "host": str(r[3] or ""),
                 "category": str(r[4] or ""),
-                "enabled": int(r[5] or 0),
-                "created_at": int(r[6] or 0),
-                "updated_at": int(r[7] or 0),
+                "feed_type": str(r[5] or ""),
+                "country": str(r[6] or ""),
+                "language": str(r[7] or ""),
+                "source": str(r[8] or ""),
+                "seed_last_updated": _parse_ts_loose(r[9]),
+                "last_updated_time": last_updated_str,
+                "enabled": int(r[10] or 0),
+                "created_at": int(r[11] or 0),
+                "updated_at": int(r[12] or 0),
                 "subscribed_count": int(subs_map.get(sid, 0) or 0),
                 "added_count": int(adds_map.get(sid, 0) or 0),
                 "entries_count": int(entries_map.get(sid, 0) or 0),

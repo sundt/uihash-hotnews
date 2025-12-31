@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response
 
 from mcp_server.services.cache_service import get_cache
 from trendradar.web.db_online import get_online_db_conn
+from trendradar.web.user_db import get_user_db_conn, list_rss_subscriptions, resolve_user_id_by_cookie_token
 
 
 router = APIRouter()
@@ -552,6 +553,34 @@ def rss_proxy_fetch_cached(url: str) -> Dict[str, Any]:
             pass
 
 
+def _resolve_anon_user_id_from_request(request: Request) -> Optional[int]:
+    try:
+        tok = (request.cookies.get("rss_uid") or "").strip()
+        if not tok:
+            return None
+        conn = get_user_db_conn(project_root=request.app.state.project_root)
+        return resolve_user_id_by_cookie_token(conn=conn, token=tok)
+    except Exception:
+        return None
+
+
+def _parse_exclude_source_ids(raw: str) -> List[str]:
+    s = (raw or "").strip()
+    if not s:
+        return []
+    out: List[str] = []
+    seen = set()
+    for part in s.split(","):
+        sid = (part or "").strip()
+        if not sid:
+            continue
+        if sid in seen:
+            continue
+        seen.add(sid)
+        out.append(sid)
+    return out
+
+
 def _now_ts() -> int:
     return int(time.time())
 
@@ -742,6 +771,123 @@ async def api_proxy_fetch(request: Request, url: str = Query(...)):
         return UnicodeJSONResponse(content=result)
     except Exception as e:
         return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+
+@router.get("/api/rss-sources/explore-cards")
+async def api_rss_sources_explore_cards(
+    request: Request,
+    cards: int = Query(4, ge=1, le=10),
+    entries_per_card: int = Query(20, ge=1, le=50),
+    exclude_source_ids: str = Query(""),
+):
+    try:
+        init_fn = getattr(request.app.state, "init_default_rss_sources_if_empty", None)
+        if callable(init_fn):
+            init_fn()
+
+        exclude = set(_parse_exclude_source_ids(exclude_source_ids))
+
+        uid = _resolve_anon_user_id_from_request(request)
+        if uid:
+            try:
+                subs = list_rss_subscriptions(conn=get_user_db_conn(project_root=request.app.state.project_root), user_id=uid)
+                for s in subs:
+                    sid = str((s or {}).get("source_id") or "").strip()
+                    if sid:
+                        exclude.add(sid)
+            except Exception:
+                pass
+
+        conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+        where = ["s.enabled = 1"]
+        args: List[Any] = []
+        if exclude:
+            placeholders = ",".join(["?"] * len(exclude))
+            where.append(f"s.id NOT IN ({placeholders})")
+            args.extend(list(exclude))
+        where_sql = " AND ".join(where)
+
+        limit_cards = max(1, int(cards))
+        limit_entries = max(1, int(entries_per_card))
+
+        cur = conn.execute(
+            f"""
+            SELECT s.id, s.name, s.url, s.updated_at,
+                   MAX(CASE WHEN e.published_at > 0 THEN e.published_at ELSE e.created_at END) AS last_ts
+            FROM rss_sources s
+            JOIN rss_entries e ON e.source_id = s.id
+            WHERE {where_sql}
+            GROUP BY s.id
+            ORDER BY last_ts DESC, s.updated_at DESC
+            LIMIT ?
+            """,
+            tuple(args + [limit_cards * 8]),
+        )
+        src_rows = cur.fetchall() or []
+
+        cards_out: List[Dict[str, Any]] = []
+        for r in src_rows:
+            if len(cards_out) >= limit_cards:
+                break
+            sid = str(r[0] or "").strip()
+            if not sid:
+                continue
+            name = str(r[1] or "").strip() or sid
+            url = str(r[2] or "").strip()
+
+            try:
+                cur2 = conn.execute(
+                    """
+                    SELECT title, url, published_at, created_at
+                    FROM rss_entries
+                    WHERE source_id = ?
+                    ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (sid, limit_entries),
+                )
+                entry_rows = cur2.fetchall() or []
+            except Exception:
+                entry_rows = []
+
+            entries: List[Dict[str, Any]] = []
+            for er in entry_rows:
+                title = str(er[0] or "").strip()
+                link = str(er[1] or "").strip()
+                if not link:
+                    continue
+                if not title:
+                    title = link
+                published_at = int(er[2] or 0)
+                created_at = int(er[3] or 0)
+                ts = published_at if published_at > 0 else created_at
+                entries.append({"title": title, "link": link, "ts": ts})
+
+            if not entries:
+                continue
+
+            cards_out.append(
+                {
+                    "source_id": sid,
+                    "url": url,
+                    "platform_name": name,
+                    "feed_title": name,
+                    "entries_count": len(entries),
+                    "entries": entries,
+                }
+            )
+
+        return UnicodeJSONResponse(
+            content={
+                "cards": cards_out,
+                "cards_requested": limit_cards,
+                "cards_returned": len(cards_out),
+                "incomplete": len(cards_out) < limit_cards,
+            }
+        )
+    except Exception as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=500)
 
 
 @router.get("/api/rss-sources")

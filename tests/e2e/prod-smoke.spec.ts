@@ -16,7 +16,7 @@ test.describe('@prod Smoke', () => {
     await expect(page.locator('.category-tabs .category-tab').first()).toBeVisible();
   });
 
-  test('viewer NBA should expand beyond 20 items', async ({ page }) => {
+  test('viewer NBA should not expand beyond 20 items', async ({ page }) => {
     const viewerPage = new ViewerPage(page);
     await viewerPage.goto();
 
@@ -34,9 +34,9 @@ test.describe('@prod Smoke', () => {
     const visible = card.locator('.news-item:not(.paged-hidden)');
     await expect.poll(async () => await visible.count(), { timeout: 45_000 }).toBeGreaterThan(0);
 
-    // Trigger another lazy-load cycle so paging window can exceed 20
+    // Trigger another lazy-load cycle; count should still be capped to 20
     await sentinel.scrollIntoViewIfNeeded();
-    await expect.poll(async () => await visible.count(), { timeout: 45_000 }).toBeGreaterThan(20);
+    await expect.poll(async () => await visible.count(), { timeout: 45_000 }).toBeLessThanOrEqual(20);
   });
 
   test('RSS source picker layout should be compact', async ({ page }) => {
@@ -45,7 +45,10 @@ test.describe('@prod Smoke', () => {
     await expect(page.locator('.category-tabs .category-tab').first()).toBeVisible({ timeout: 15000 });
 
     // Open RSS subscription modal
-    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssSubscriptionModal?.();
+    });
     const rssModal = page.locator('#rssSubscriptionModal');
     await rssModal.waitFor({ state: 'visible' });
 

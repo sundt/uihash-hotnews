@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+process.env.VIEWER_PATH = process.env.VIEWER_PATH || '/?e2e=1';
+
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8090';
 const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(baseURL);
 

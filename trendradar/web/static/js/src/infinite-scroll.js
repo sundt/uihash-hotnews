@@ -2,7 +2,7 @@ import { TR, ready } from './core.js';
 
 const STEP = 20;
 const ROOT_MARGIN = '240px 0px 240px 0px';
-const MAX_ITEMS_PER_PLATFORM = 40;
+const MAX_ITEMS_PER_PLATFORM = 20;
 
 let _observer = null;
 let _armed = false;
@@ -91,14 +91,6 @@ function createNewsLi(n, idx, platformId) {
     const content = document.createElement('div');
     content.className = 'news-item-content';
 
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'news-checkbox';
-    cb.title = '标记已读';
-    cb.addEventListener('change', () => {
-        try { window.markAsRead(cb); } catch (e) { /* ignore */ }
-    });
-
     const indexSpan = document.createElement('span');
     indexSpan.className = 'news-index';
     indexSpan.textContent = String(idx);
@@ -125,7 +117,6 @@ function createNewsLi(n, idx, platformId) {
         a.appendChild(badge);
     }
 
-    content.appendChild(cb);
     content.appendChild(indexSpan);
     content.appendChild(a);
     li.appendChild(content);
@@ -381,8 +372,6 @@ function applyReadStateToItem(li) {
         const reads = TR.readState.getReadNews() || {};
         if (!reads[id]) return;
         li.classList.add('read');
-        const cb = li.querySelector('.news-checkbox');
-        if (cb) cb.checked = true;
     } catch (e) {
         // ignore
     }
