@@ -19,6 +19,33 @@ let _settingsAllCategoriesOffSnapshot = null;
 let _platformSearchQuery = '';
 let _categoryConfigChanged = false;
 
+function promoteCategoryOrder(order, desiredFront) {
+    const base = Array.isArray(order) ? order : [];
+    const seen = new Set();
+    const cleaned = [];
+    base.forEach((x) => {
+        const id = String(x || '').trim();
+        if (!id) return;
+        if (seen.has(id)) return;
+        seen.add(id);
+        cleaned.push(id);
+    });
+
+    const front = Array.isArray(desiredFront) ? desiredFront : [];
+    front.forEach((id) => {
+        const idx = cleaned.indexOf(id);
+        if (idx >= 0) cleaned.splice(idx, 1);
+    });
+
+    for (let i = front.length - 1; i >= 0; i -= 1) {
+        const id = String(front[i] || '').trim();
+        if (!id) continue;
+        cleaned.unshift(id);
+    }
+
+    return cleaned;
+}
+
 function ensureCategoryFilters(config) {
     if (!config.categoryFilters || typeof config.categoryFilters !== 'object') {
         config.categoryFilters = {};
@@ -141,8 +168,16 @@ export const settings = {
         });
 
         try {
-            if (Array.isArray(merged.categoryOrder) && !merged.categoryOrder.includes('explore')) {
-                merged.categoryOrder.unshift('explore');
+            const flagKey = '__migrated_explore_ai_front_v1';
+            const idxExplore = Array.isArray(userConfig.categoryOrder) ? userConfig.categoryOrder.indexOf('explore') : -1;
+            const idxAi = Array.isArray(userConfig.categoryOrder) ? userConfig.categoryOrder.indexOf('ai') : -1;
+            const needsPromote = (idxExplore > 0) || (idxExplore < 0) || (idxAi > 1);
+            if (!userConfig[flagKey] && needsPromote) {
+                const promoted = promoteCategoryOrder(merged.categoryOrder, ['explore', 'ai']);
+                merged.categoryOrder = promoted;
+                userConfig.categoryOrder = promoted;
+                userConfig[flagKey] = Date.now();
+                this.saveCategoryConfig(userConfig);
             }
         } catch (e) {
             // ignore
