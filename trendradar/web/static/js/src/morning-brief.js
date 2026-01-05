@@ -3,9 +3,16 @@ import { TR, ready, escapeHtml } from './core.js';
 const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
 const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
+const TAB_SWITCHED_EVENT = 'tr_tab_switched';
+const AUTO_REFRESH_INTERVAL_MS = 300000;
+const AUTO_REFRESH_TICK_MS = 5000;
 
 const TIMELINE_LIMIT = 150;
 const SLICE_SIZE = 50;
+
+let _timelineInFlight = false;
+let _timelineLastRefreshAt = 0;
+let _tabSwitchDebounceTimer = null;
 
 function _getActiveTabId() {
     try {
@@ -173,6 +180,39 @@ function _renderList(kind, html) {
     }
 }
 
+function _isDocumentVisible() {
+    try {
+        return document.visibilityState === 'visible';
+    } catch (e) {
+        return true;
+    }
+}
+
+async function _refreshTimelineIfNeeded(opts = {}) {
+    const force = opts.force === true;
+    if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
+    if (!_isDocumentVisible()) return false;
+    if (_timelineInFlight) return false;
+
+    const now = Date.now();
+    if (!force && _timelineLastRefreshAt > 0 && (now - _timelineLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
+        return false;
+    }
+    if (!_ensureLayout()) return false;
+    _attachHandlersOnce();
+
+    _timelineInFlight = true;
+    try {
+        await _loadTimeline();
+        _timelineLastRefreshAt = Date.now();
+        return true;
+    } catch (e) {
+        return false;
+    } finally {
+        _timelineInFlight = false;
+    }
+}
+
 async function _loadTimeline() {
     const payload = await _fetchJson(`/api/rss/brief/timeline?limit=${encodeURIComponent(String(TIMELINE_LIMIT))}&offset=0`);
     const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -251,7 +291,7 @@ function _attachHandlersOnce() {
             e.preventDefault();
             const target = refresh.getAttribute('data-target') || '';
             if (target === 'timeline') {
-                _loadTimeline().catch(() => {
+                _refreshTimelineIfNeeded({ force: true }).catch(() => {
                     try { TR.toast?.show('刷新失败', { variant: 'error', durationMs: 2000 }); } catch (_) {}
                 });
                 return;
@@ -272,7 +312,7 @@ async function _initialLoad() {
 
     // Initial load once.
     await Promise.allSettled([
-        _loadTimeline(),
+        _refreshTimelineIfNeeded({ force: true }),
     ]);
 }
 
@@ -280,21 +320,34 @@ function _ensurePolling() {
     if (TR.morningBrief && TR.morningBrief._pollTimer) return;
 
     const timer = window.setInterval(() => {
-        try {
-            if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return;
-        } catch (e) {
-            return;
-        }
-        if (!_ensureLayout()) return;
-        _attachHandlersOnce();
+        _refreshTimelineIfNeeded({ force: false }).catch(() => {});
 
         // Timeline mode: no polling by default.
-    }, 60 * 1000);
+    }, AUTO_REFRESH_TICK_MS);
 
     TR.morningBrief = {
         ...(TR.morningBrief || {}),
         _pollTimer: timer,
     };
+
+    try {
+        document.addEventListener('visibilitychange', () => {
+            if (_isDocumentVisible()) {
+                _refreshTimelineIfNeeded({ force: true }).catch(() => {});
+            }
+        });
+    } catch (e) {}
+
+    try {
+        window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
+            const cid = String(ev?.detail?.categoryId || '').trim();
+            if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
+            clearTimeout(_tabSwitchDebounceTimer);
+            _tabSwitchDebounceTimer = setTimeout(() => {
+                _refreshTimelineIfNeeded({ force: true }).catch(() => {});
+            }, 120);
+        });
+    } catch (e) {}
 }
 
 function _patchRenderHook() {

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -42,7 +43,7 @@ _mb_ai_budget_window_start: float = 0.0
 _mb_ai_budget_count: int = 0
 
 
-_MB_AI_PROMPT_VERSION = "mb_llm_filter_v2_enhanced"  # Updated: added few-shot examples, Chinese support, detailed category definitions
+_MB_AI_PROMPT_VERSION = "mb_llm_filter_v4_hybrid"  # Chinese-first for DeepSeek/Qwen, English fields for compatibility
 _MB_AI_ALLOWED_CATEGORIES = {"AI_MODEL", "DEV_INFRA", "HARDWARE_PRO"}
 _MB_AI_SCORE_MIN = 75
 _MB_AI_CONFIDENCE_MIN = 0.70
@@ -97,58 +98,23 @@ def _mb_ai_extract_domain(url: str) -> str:
 
 
 def _mb_ai_prompt_text() -> str:
+    """v4_hybrid: Chinese-first instructions for DeepSeek/Qwen, English field names for code compatibility"""
     return (
-        "You are a Senior Technical Editor for a high-quality developer news aggregator serving Chinese and English developers.\n\n"
-        "Goal:\n"
-        "Classify RSS content and decide whether it should be INCLUDED in a 'Hardcore Tech / Engineering' feed.\n"
-        "Be conservative and precise. When uncertain, EXCLUDE.\n\n"
-        "Input:\n"
-        "A JSON array of items: [{\"id\":...,\"source\":...,\"domain\":...,\"title\":...}]\n"
-        "- Titles may be in Chinese, English, or mixed languages\n"
-        "- Domain indicates the source website\n\n"
-        "Output (STRICT):\n"
-        "- Output ONLY a valid JSON array (top-level array).\n"
-        "- NO markdown, NO code fences, NO explanations, NO comments.\n"
-        "- Output MUST contain exactly one object per input item, in the same order.\n"
-        "- Do not add or remove items. Do not change ids.\n\n"
-        "Schema for each output item:\n"
-        "{\"id\":\"...\",\"category\":\"AI_MODEL|DEV_INFRA|HARDWARE_PRO|CONSUMER|BUSINESS|MARKETING|OTHER\",\"action\":\"include|exclude\",\"score\":0,\"confidence\":0.0,\"reason\":\"...\"}\n\n"
-        "Category Definitions:\n"
-        "- AI_MODEL: AI模型发布、算法研究、模型架构、训练技术、推理优化\n"
-        "- DEV_INFRA: 开发工具、编程语言、框架库、CI/CD、云原生、数据库、中间件\n"
-        "- HARDWARE_PRO: 芯片架构、GPU/TPU、服务器硬件、网络设备、存储技术\n"
-        "- CONSUMER: 消费电子产品、智能硬件、手机平板、智能家居（非技术深度）\n"
-        "- BUSINESS: 融资新闻、公司动态、市场分析、商业策略（非技术内容）\n"
-        "- MARKETING: 营销活动、产品发布会、品牌推广、用户增长（非技术）\n"
-        "- OTHER: 不属于以上任何分类的内容\n\n"
-        "Mandatory decision rules:\n"
-        "1) CATEGORY: Choose the MAIN focus. Mixed cases: if >60% technical depth → technical category; otherwise → business category.\n"
-        "2) ACTION:\n"
-        "   - include: ONLY if category is AI_MODEL/DEV_INFRA/HARDWARE_PRO AND has substantial technical depth\n"
-        "   - exclude: all other cases (CONSUMER/BUSINESS/MARKETING/OTHER, or shallow technical content)\n"
-        "3) SCORE (0-100): Engineering value for developers\n"
-        "   - 90-100: Breakthrough technology, major framework release, critical security advisory\n"
-        "   - 75-89: Important updates, useful tools, insightful technical articles\n"
-        "   - 50-74: Regular updates, minor improvements, general tech news\n"
-        "   - <50: Low technical value or non-technical content\n"
-        "4) CONFIDENCE (0.0-1.0): Your certainty in classification\n"
-        "   - ≥0.90: Very clear technical/business content\n"
-        "   - 0.70-0.89: Clear but some ambiguity\n"
-        "   - <0.70: Uncertain → MUST choose action='exclude'\n"
-        "5) REASON: One sentence explanation, in the same language as title (Chinese if title is Chinese, English if English)\n\n"
-        "Examples (Few-shot):\n"
-        "1. {\"id\":\"x\",\"title\":\"OpenAI发布GPT-5模型，性能提升300%\"} → {\"category\":\"AI_MODEL\",\"action\":\"include\",\"score\":95,\"confidence\":0.95,\"reason\":\"重大AI模型发布\"}\n"
-        "2. {\"id\":\"x\",\"title\":\"Kubernetes 1.30 released with enhanced security\"} → {\"category\":\"DEV_INFRA\",\"action\":\"include\",\"score\":82,\"confidence\":0.88,\"reason\":\"Important infrastructure update\"}\n"
-        "3. {\"id\":\"x\",\"title\":\"某AI公司完成B轮融资5亿美元\"} → {\"category\":\"BUSINESS\",\"action\":\"exclude\",\"score\":30,\"confidence\":0.92,\"reason\":\"融资新闻，无技术深度\"}\n"
-        "4. {\"id\":\"x\",\"title\":\"新款iPhone 16发布，售价$999\"} → {\"category\":\"CONSUMER\",\"action\":\"exclude\",\"score\":25,\"confidence\":0.95,\"reason\":\"消费电子产品发布\"}\n"
-        "5. {\"id\":\"x\",\"title\":\"2024年AI行业趋势报告\"} → {\"category\":\"MARKETING\",\"action\":\"exclude\",\"score\":35,\"confidence\":0.75,\"reason\":\"市场分析报告\"}\n\n"
-        "Calibration:\n"
-        "Final filter: action='include' AND score≥75 AND confidence≥0.70 AND category∈{AI_MODEL,DEV_INFRA,HARDWARE_PRO}\n"
-        "Therefore:\n"
-        "- If confidence < 0.70: MUST choose action='exclude'\n"
-        "- If score < 75: Content won't pass final filter\n"
-        "- Scores ≥90 should be rare (only truly significant technical breakthroughs)\n"
-        "- Be strict: when in doubt, exclude rather than include\n"
+        "任务：严格分类科技RSS。输入N条，必须输出N条JSON。\n\n"
+        "分类标准（互斥）：\n"
+        "• AI_MODEL: 模型架构/训练算法/推理优化\n"
+        "• DEV_INFRA: 开发工具/编程语言/数据库/框架\n"
+        "• HARDWARE_PRO: 芯片设计/GPU/服务器硬件\n"
+        "• BUSINESS: 融资/公司动态\n"
+        "• CONSUMER: 消费电子产品\n"
+        "• MARKETING: 营销活动/品牌推广\n"
+        "• OTHER: 其他内容\n\n"
+        "保留规则：仅当 类别∈[AI_MODEL,DEV_INFRA,HARDWARE_PRO] 且 分数≥75 且 置信度≥0.7 时action=include，否则exclude。\n\n"
+        "输出格式（严格JSON数组）：[{\"id\":\"...\",\"category\":\"...\",\"action\":\"include|exclude\",\"score\":0-100,\"confidence\":0.0-1.0,\"reason\":\"<8字\"}]\n"
+        "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
+        "示例：\n"
+        "{\"title\":\"Llama-4训练细节公开\"} → {\"category\":\"AI_MODEL\",\"action\":\"include\",\"score\":88,\"confidence\":0.85,\"reason\":\"训练技术\"}\n"
+        "{\"title\":\"某AI公司完成B轮融资\"} → {\"category\":\"BUSINESS\",\"action\":\"exclude\",\"score\":35,\"confidence\":0.92,\"reason\":\"融资新闻\"}\n"
     )
 
 
@@ -177,13 +143,23 @@ def _mb_ai_call_qwen(items: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         "Content-Type": "application/json",
     }
 
-    timeout_s = 30
+    timeout_s = 60  # Increased from 30s to 60s for better reliability
     try:
-        timeout_s = int(os.environ.get("TREND_RADAR_MB_AI_TIMEOUT_S", "30"))
+        timeout_s = int(os.environ.get("TREND_RADAR_MB_AI_TIMEOUT_S", "60"))
     except Exception:
-        timeout_s = 30
+        timeout_s = 60
 
-    resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout_s)
+    # Disable proxy to avoid connection issues with DashScope API
+    proxies = {
+        "http": None,
+        "https": None,
+    }
+    
+    # Allow proxy override via environment variable if needed
+    if os.environ.get("TREND_RADAR_MB_AI_USE_PROXY", "").strip().lower() in {"1", "true", "yes"}:
+        proxies = None  # Use system proxy settings
+
+    resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout_s, proxies=proxies)
     if resp.status_code < 200 or resp.status_code >= 300:
         raise RuntimeError(f"qwen_http_{resp.status_code}: {resp.text[:500]}")
     data = resp.json() if resp.content else {}
@@ -201,8 +177,10 @@ def _mb_ai_call_qwen(items: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     parsed = json.loads(content)
     if not isinstance(parsed, list):
         raise RuntimeError("qwen_invalid_json_not_array")
-    if len(parsed) != len(items):
-        raise RuntimeError(f"qwen_invalid_len expected={len(items)} got={len(parsed)}")
+    # 允许少返回几条（最多少20%），而不是完全失败
+    min_expected = int(len(items) * 0.8)
+    if len(parsed) < min_expected:
+        raise RuntimeError(f"qwen_invalid_len expected>={min_expected} got={len(parsed)}")
     return parsed
 
 
@@ -701,6 +679,15 @@ def _rss_parse_published_ts(published_raw: str) -> int:
     s = (published_raw or "").strip()
     if not s:
         return 0
+
+    try:
+        s = re.sub(r"\s+", " ", s).strip()
+        s = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", s)
+        s = re.sub(r"\s+([+-]\d{2}:\d{2})$", r"\1", s)
+        if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$", s):
+            s = s.replace(" ", "T", 1)
+    except Exception:
+        pass
 
     # 1) Numeric timestamp (seconds)
     try:

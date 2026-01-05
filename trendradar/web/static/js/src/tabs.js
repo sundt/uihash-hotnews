@@ -9,6 +9,7 @@ import { storage } from './storage.js';
 const TAB_STORAGE_KEY = 'trendradar_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'trendradar_viewer_pos_v1';
 const EXPLORE_TAB_ID = 'explore';
+const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const EXPLORE_MODAL_OPENED_EVENT = 'tr_explore_modal_opened';
 const EXPLORE_MODAL_CLOSED_EVENT = 'tr_explore_modal_closed';
 
@@ -154,6 +155,11 @@ export const tabs = {
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         paneEl.classList.add('active');
         storage.setRaw(TAB_STORAGE_KEY, categoryId);
+
+        try {
+            window.dispatchEvent(new CustomEvent(TAB_SWITCHED_EVENT, { detail: { categoryId } }));
+        } catch (e) {
+        }
 
         _persistViewerPos(categoryId, window.scrollY || 0);
 
