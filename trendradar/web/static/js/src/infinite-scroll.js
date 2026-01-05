@@ -91,6 +91,14 @@ function createNewsLi(n, idx, platformId) {
     const content = document.createElement('div');
     content.className = 'news-item-content';
 
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'news-checkbox';
+    cb.title = '标记已读';
+    cb.addEventListener('change', () => {
+        try { window.markAsRead(cb); } catch (e) { /* ignore */ }
+    });
+
     const indexSpan = document.createElement('span');
     indexSpan.className = 'news-index';
     indexSpan.textContent = String(idx);
@@ -117,6 +125,7 @@ function createNewsLi(n, idx, platformId) {
         a.appendChild(badge);
     }
 
+    content.appendChild(cb);
     content.appendChild(indexSpan);
     content.appendChild(a);
     li.appendChild(content);

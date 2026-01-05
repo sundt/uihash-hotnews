@@ -99,6 +99,32 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub ON rss_entries(published_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_created ON rss_entries(source_id, created_at DESC)")
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rss_entry_ai_labels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id TEXT NOT NULL,
+            dedup_key TEXT NOT NULL,
+            url TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            title TEXT NOT NULL,
+            category TEXT NOT NULL,
+            action TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            confidence REAL NOT NULL,
+            reason TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            labeled_at INTEGER NOT NULL,
+            error TEXT NOT NULL DEFAULT '',
+            UNIQUE(source_id, dedup_key)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entry_ai_labels_labeled_at ON rss_entry_ai_labels(labeled_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entry_ai_labels_action_score ON rss_entry_ai_labels(action, score DESC)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")

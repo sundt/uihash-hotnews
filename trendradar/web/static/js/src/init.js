@@ -39,13 +39,16 @@ function _setMobileTopCollapsed(collapsed) {
 }
 
 function _setupMobileTopToggle() {
-    let collapsed = true;
-    try {
-        const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
-        if (raw === '0') collapsed = false;
-        if (raw === '1') collapsed = true;
-    } catch (e) {
-        // ignore
+    const isNarrow = _isMobileNarrowScreen();
+    let collapsed = isNarrow;
+    if (isNarrow) {
+        try {
+            const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
+            if (raw === '0') collapsed = false;
+            if (raw === '1') collapsed = true;
+        } catch (e) {
+            // ignore
+        }
     }
 
     // E2E: always keep the top area visible, so tests can reliably interact with category tabs.

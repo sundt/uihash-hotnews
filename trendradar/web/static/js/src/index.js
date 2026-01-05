@@ -29,6 +29,7 @@ import './rss-catalog-preview-parity.js';
 import './explore-embedded-rss.js';
 import './rss-category-carousel.js';
 import './title-drag-scroll.js';
+import './morning-brief.js';
 
 // 初始化模块（必须最后导入）
 import './init.js';

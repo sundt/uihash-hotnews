@@ -6,6 +6,7 @@
 import { TR, ready } from './core.js';
 
 const CATEGORY_PAGE_SIZE = 20;
+const MORNING_BRIEF_PAGE_SIZE = 50;
 const AUTOFILL_STEP = 20;
 const AUTOFILL_MIN_VISIBLE = 10;
 const AUTOFILL_MAX_STEPS = 8;
@@ -15,18 +16,29 @@ const AUTOFILL_SCROLL_BOTTOM_PX = 160;
 export const paging = {
     PAGE_SIZE: CATEGORY_PAGE_SIZE,
 
+    getCardMaxPageSize(card) {
+        try {
+            if (card?.classList?.contains('tr-morning-brief-card')) return MORNING_BRIEF_PAGE_SIZE;
+        } catch (e) {
+            // ignore
+        }
+        return CATEGORY_PAGE_SIZE;
+    },
+
     getCardPageSize(card) {
         const raw = card?.dataset?.pageSize;
         const n = parseInt(raw || '', 10);
         const base = Number.isFinite(n) && n > 0 ? n : CATEGORY_PAGE_SIZE;
-        return Math.min(CATEGORY_PAGE_SIZE, Math.max(1, base));
+        const max = this.getCardMaxPageSize(card);
+        return Math.min(max, Math.max(1, base));
     },
 
     setCardPageSize(card, pageSize) {
         if (!card) return;
         const n = parseInt(String(pageSize || ''), 10);
         const safe = Number.isFinite(n) && n > 0 ? n : CATEGORY_PAGE_SIZE;
-        card.dataset.pageSize = String(Math.min(CATEGORY_PAGE_SIZE, Math.max(1, safe)));
+        const max = this.getCardMaxPageSize(card);
+        card.dataset.pageSize = String(Math.min(max, Math.max(1, safe)));
     },
 
     applyPagingToCard(card, offset) {
@@ -52,7 +64,8 @@ export const paging = {
 
     initPaging() {
         document.querySelectorAll('.platform-card').forEach((card) => {
-            this.setCardPageSize(card, CATEGORY_PAGE_SIZE);
+            const max = this.getCardMaxPageSize(card);
+            this.setCardPageSize(card, max);
             this.applyPagingToCard(card, 0);
         });
         TR.counts.updateAllCounts();
@@ -63,9 +76,10 @@ export const paging = {
         if (!card) return;
         const items = card.querySelectorAll('.news-item');
         const total = items.length;
-        if (total <= CATEGORY_PAGE_SIZE) return;
+        const pageSize = this.getCardPageSize(card);
+        if (total <= pageSize) return;
         const current = parseInt(card.dataset.pageOffset || '0', 10);
-        const next = (current + CATEGORY_PAGE_SIZE >= total) ? 0 : (current + CATEGORY_PAGE_SIZE);
+        const next = (current + pageSize >= total) ? 0 : (current + pageSize);
         this.applyPagingToCard(card, next);
         TR.counts.updateAllCounts();
     },

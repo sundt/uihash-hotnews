@@ -819,6 +819,27 @@ function _renderAddCategoryDropdownHtml(card) {
         </select>`;
 }
 
+function _applyReadStateToExploreRoot(root) {
+    try {
+        if (!root) return;
+        if (!TR.readState || typeof TR.readState.getReadNews !== 'function') return;
+        const reads = TR.readState.getReadNews() || {};
+        const items = root.querySelectorAll('.news-item[data-news-id]');
+        items.forEach((el) => {
+            try {
+                const id = String(el?.dataset?.newsId || '').trim();
+                if (!id) return;
+                if (!reads[id]) return;
+                el.classList.add('read');
+            } catch (e) {
+                // ignore
+            }
+        });
+    } catch (e) {
+        // ignore
+    }
+}
+
 function _renderBatch(cards) {
     const grid = _getGridEl();
     if (!grid) return;
@@ -833,11 +854,12 @@ function _renderBatch(cards) {
         const listHtml = items.slice(0, ENTRIES_PER_SOURCE).map((e, idx) => {
             const title = escapeHtml(e?.title || '');
             const link = escapeHtml(e?.link || '#');
+            const newsId = escapeHtml(`rssx:${sid}:${e?.link || ''}`);
             return `
-                <li class="news-item" data-news-id="" data-news-title="${title}">
+                <li class="news-item" data-news-id="${newsId}" data-news-title="${title}">
                     <div class="news-item-content">
                         <span class="news-index">${String(idx + 1)}</span>
-                        <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer">${title}</a>
+                        <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">${title}</a>
                     </div>
                 </li>`;
         }).join('');
@@ -857,6 +879,7 @@ function _renderBatch(cards) {
 
     if (html) {
         grid.innerHTML = html;
+        _applyReadStateToExploreRoot(grid);
         return;
     }
     _renderGridMessage('暂无可预览源', { retry: true });
@@ -872,11 +895,12 @@ function _renderCardElement(card, opts = {}) {
     const listHtml = items.slice(0, ENTRIES_PER_SOURCE).map((e, idx) => {
         const title = escapeHtml(e?.title || '');
         const link = escapeHtml(e?.link || '#');
+        const newsId = escapeHtml(`rssx:${sid}:${e?.link || ''}`);
         return `
-            <li class="news-item" data-news-id="" data-news-title="${title}">
+            <li class="news-item" data-news-id="${newsId}" data-news-title="${title}">
                 <div class="news-item-content">
                     <span class="news-index">${String(idx + 1)}</span>
-                    <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer">${title}</a>
+                    <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">${title}</a>
                 </div>
             </li>`;
     }).join('');
@@ -949,6 +973,7 @@ async function _replaceCardInPlace(oldSid, cardEl) {
         try {
             if (cardEl && cardEl.parentNode) {
                 cardEl.parentNode.replaceChild(newEl, cardEl);
+                _applyReadStateToExploreRoot(newEl);
             } else {
                 _renderBatch(_currentBatch);
             }
@@ -990,9 +1015,41 @@ function _ensureInitialLoaded() {
     });
 }
 
+function _markReadFromTitleClickTarget(t) {
+    try {
+        if (!t || !(t instanceof Element)) return false;
+        const titleEl = t.closest('a.news-title');
+        if (!titleEl) return false;
+        const item = titleEl.closest('.news-item');
+        if (!item) return true;
+        if (TR.readState && typeof TR.readState.markItemAsRead === 'function') {
+            TR.readState.markItemAsRead(item);
+        } else {
+            item.classList.add('read');
+        }
+        return true;
+    } catch (e) {
+        try {
+            const item = t?.closest?.('.news-item');
+            if (item) item.classList.add('read');
+        } catch (_) {}
+        return true;
+    }
+}
+
 function _attachHandlers() {
     if (_delegatedHandlersAttached) return;
     _delegatedHandlersAttached = true;
+
+    document.addEventListener('click', (e) => {
+        const t = e?.target;
+        if (!t || !(t instanceof Element)) return;
+
+        const pane = _getPaneEl();
+        if (!pane || !pane.classList.contains('active')) return;
+
+        _markReadFromTitleClickTarget(t);
+    }, true);
 
     document.addEventListener('click', (e) => {
         const t = e?.target;

@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ViewerPage } from './pages/viewer.page';
+import fs from 'fs';
+import path from 'path';
 
 test.describe('Explore Tab Embedded RSS Stream', () => {
   let viewerPage: ViewerPage;
@@ -15,6 +17,16 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
     });
     viewerPage = new ViewerPage(page);
 
+    await page.route('**/static/js/viewer.bundle.js*', async (route) => {
+      const bundlePath = path.resolve(__dirname, '../../trendradar/web/static/js/viewer.bundle.js');
+      const body = fs.readFileSync(bundlePath, 'utf-8');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/javascript; charset=utf-8',
+        body,
+      });
+    });
+
     await page.addInitScript(() => {
       const marker = '__e2e_explore_embedded_storage_cleared_v1';
       if (localStorage.getItem(marker) === '1') return;
@@ -28,6 +40,8 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
       localStorage.removeItem('trendradar_explore_last_source_v1');
       localStorage.removeItem('trendradar_explore_tab_seen_sources_v1');
       localStorage.removeItem('trendradar_explore_tab_cursor_v1');
+      localStorage.removeItem('trendradar_read_news_v2');
+      localStorage.removeItem('trendradar_show_read_mode');
 
       // Ensure Explore is NOT the initial active tab so the test can observe the
       // explore-cards request triggered on switching to Explore.
@@ -211,6 +225,151 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
         return !ids.includes(String(closedId || '').trim());
       })
       .toBeTruthy();
+  });
+
+  test('clicking explore entry marks it as read and turns title gray', async ({ page }) => {
+    const sources = Array.from({ length: 4 }).map((_, i) => {
+      const id = `rsssrc-${String.fromCharCode(97 + i)}`;
+      return { id, name: `Feed ${id.toUpperCase()}`, url: `https://${id}.example.com/feed.xml`, host: `${id}.example.com`, category: 'tech', enabled: true, created_at: 0, updated_at: 100 - i };
+    });
+
+    await page.route('**/api/me/rss-subscriptions', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: [] }),
+        });
+        return;
+      }
+      if (method === 'PUT') {
+        const bodyRaw = route.request().postData() || '';
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(bodyRaw);
+        } catch (e) {
+          parsed = null;
+        }
+        const subs = Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: subs }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: 'Method Not Allowed' });
+    });
+
+    await page.route('**/api/news', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          updated_at: '2030-01-01 00:00:00',
+          categories: {
+            explore: { id: 'explore', name: '深入探索', icon: '🔎', platforms: {} },
+            general: { id: 'general', name: '综合新闻', icon: '📰', platforms: {} },
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/rss-sources/explore-cards*', async (route) => {
+      const url = new URL(route.request().url());
+      const cards = Number(url.searchParams.get('cards') || 4) || 4;
+      const entriesPerCard = Number(url.searchParams.get('entries_per_card') || 20) || 20;
+      const picked = sources.slice(0, Math.min(cards, sources.length));
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          cards: picked.map((s) => ({
+            source_id: s.id,
+            url: s.url,
+            platform_name: s.name,
+            feed_title: s.name,
+            entries_count: entriesPerCard,
+            entries: Array.from({ length: entriesPerCard }).map((_, i) => ({
+              title: `${s.id}-title-${i + 1}`,
+              link: `https://${s.id}.example.com/${i + 1}`,
+              ts: 1735440000,
+            })),
+          })),
+          cards_requested: cards,
+          cards_returned: picked.length,
+          incomplete: picked.length < cards,
+        }),
+      });
+    });
+
+    await page.route('**/api/rss-sources/warmup?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ queued: 1, results: [] }),
+      });
+    });
+
+    await viewerPage.goto();
+
+    await page.locator('.category-tabs .category-tab[data-category="explore"]').click();
+    await expect(page.locator('#tab-explore')).toHaveClass(/active/);
+    await expect(page.locator('#trExploreGrid .platform-card')).toHaveCount(4, { timeout: 20000 });
+
+    const firstItem = page.locator('#trExploreGrid .platform-card').first().locator('.news-item').first();
+    const title = firstItem.locator('a.news-title');
+
+    const diagBefore = await page.evaluate(() => {
+      const a = document.querySelector('#trExploreGrid a.news-title') as HTMLAnchorElement | null;
+      const li = a?.closest('.news-item') as HTMLElement | null;
+      return {
+        hasGlobalHandle: typeof (window as any).handleTitleClickV2,
+        hasTR: !!(window as any).TrendRadar,
+        hasReadState: !!(window as any).TrendRadar?.readState,
+        onclickAttr: a?.getAttribute('onclick') || '',
+        liNewsId: li?.dataset?.newsId || '',
+        liClass: li?.className || '',
+      };
+    });
+    console.log('E2E_DIAG_BEFORE', diagBefore);
+
+    const popupPromise = page.waitForEvent('popup').catch(() => null);
+    await title.click();
+    await popupPromise;
+
+    const diagAfterClick = await page.evaluate(() => {
+      const a = document.querySelector('#trExploreGrid a.news-title') as HTMLAnchorElement | null;
+      const li = a?.closest('.news-item') as HTMLElement | null;
+      const raw = localStorage.getItem('trendradar_read_news_v2') || '';
+      return {
+        liClass: li?.className || '',
+        storageLen: raw.length,
+        storagePrefix: raw.slice(0, 120),
+      };
+    });
+    console.log('E2E_DIAG_AFTER_CLICK', diagAfterClick);
+
+    const diagAfterManual = await page.evaluate(() => {
+      const a = document.querySelector('#trExploreGrid a.news-title') as HTMLAnchorElement | null;
+      const li = a?.closest('.news-item') as HTMLElement | null;
+      try {
+        (window as any).TrendRadar?.readState?.markItemAsRead?.(li);
+      } catch (e) {
+        // ignore
+      }
+      return {
+        liClass: li?.className || '',
+      };
+    });
+    console.log('E2E_DIAG_AFTER_MANUAL', diagAfterManual);
+
+    await expect(firstItem).toHaveClass(/read/, { timeout: 5000 });
+
+    const color = await title.evaluate((el) => getComputedStyle(el).color);
+    expect(color).toBe('rgb(107, 114, 128)');
   });
 
   test('can add explore card to sports tab and then delete rss card from sports', async ({ page }) => {

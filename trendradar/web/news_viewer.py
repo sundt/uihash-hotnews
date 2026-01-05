@@ -93,16 +93,14 @@ PLATFORM_CATEGORIES = {
         "icon": "🔥",
         "news_limit": 10,
         "platforms": [
-            "weibo", "douyin", "bilibili-hot-search", "tieba", "hupu"
+            "weibo", "douyin", "bilibili-hot-search", "tieba", "hupu", "zhihu", "douban"
         ]
     },
     "knowledge": {
-        "name": "知识文化",
+        "name": "每日早报",
         "icon": "📚",
         "news_limit": 10,
-        "platforms": [
-            "zhihu", "douban"
-        ]
+        "platforms": []
     },
     "tech_news": {
         "name": "科技资讯",
@@ -367,7 +365,7 @@ class NewsViewerService:
             categories[cat_id]["filtered_count"] += 1
 
         # 移除空分类
-        keep_empty = {"ai"}
+        keep_empty = {"ai", "knowledge"}
         categories = {
             k: v for k, v in categories.items() 
             if (k in keep_empty) or v["news_count"] > 0 or v["filtered_count"] > 0

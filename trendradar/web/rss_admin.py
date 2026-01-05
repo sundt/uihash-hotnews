@@ -3,18 +3,100 @@ import os
 import asyncio
 import csv
 import io
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from trendradar.web.db_online import get_online_db_conn
 from trendradar.web.user_db import added_counts, get_user_db_conn, subscriber_counts
 
 
 router = APIRouter()
+
+
+def _ensure_admin_kv(conn) -> None:
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_kv (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    except Exception:
+        return
+
+
+def _default_morning_brief_rules() -> Dict[str, Any]:
+    return {
+        "enabled": True,
+        "drop_published_at_zero": True,
+        "topic_keywords": [
+            "ai",
+            "llm",
+            "gpt",
+            "agent",
+            "rag",
+            "diffusion",
+            "transformer",
+            "multimodal",
+            "openai",
+            "anthropic",
+            "deepmind",
+            "人工智能",
+            "大模型",
+            "机器学习",
+            "深度学习",
+            "多模态",
+            "微调",
+            "推理",
+            "训练",
+            "开源",
+            "模型",
+            "芯片",
+            "gpu",
+            "cuda",
+            "数据库",
+            "安全",
+            "云原生",
+            "kubernetes",
+            "容器",
+            "编程",
+            "系统设计",
+        ],
+        "depth_keywords": [
+            "architecture",
+            "benchmark",
+            "inference",
+            "training",
+            "evaluation",
+            "paper",
+            "open-source",
+            "quantization",
+            "fine-tune",
+            "optimization",
+            "性能",
+            "评测",
+            "论文",
+            "架构",
+            "工程",
+            "优化",
+        ],
+        "negative_hard": ["casino", "gambling", "betting"],
+        "negative_soft": ["roundup", "weekly", "top 10", "listicle", "beginner"],
+        "negative_exempt_domains": [],
+        "source_scores": {},
+        "source_decay": {"second": 0.6, "third_plus": 0.3},
+        "overrides": {"force_top": [], "force_blacklist": []},
+    }
 
 
 def _now_ts() -> int:
@@ -267,6 +349,169 @@ def _call_init_default_sources(request: Request) -> None:
             fn()
         except Exception:
             pass
+
+
+@router.get("/api/admin/morning-brief/rules")
+async def api_admin_morning_brief_get_rules(request: Request):
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    _ensure_admin_kv(conn)
+    try:
+        cur = conn.execute("SELECT value, updated_at FROM admin_kv WHERE key = ? LIMIT 1", ("morning_brief_rules_v1",))
+        row = cur.fetchone()
+    except Exception:
+        row = None
+
+    raw = ""
+    updated_at = 0
+    if row:
+        raw = str(row[0] or "")
+        try:
+            updated_at = int(row[1] or 0)
+        except Exception:
+            updated_at = 0
+
+    rules: Dict[str, Any] = _default_morning_brief_rules()
+    if raw.strip():
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                rules = {**rules, **parsed}
+        except Exception:
+            pass
+
+    return JSONResponse(content={"ok": True, "key": "morning_brief_rules_v1", "rules": rules, "updated_at": int(updated_at)})
+
+
+@router.post("/api/admin/morning-brief/rules")
+async def api_admin_morning_brief_set_rules(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    rules = body.get("rules")
+    if isinstance(rules, str):
+        try:
+            rules = json.loads(rules)
+        except Exception:
+            return JSONResponse(content={"detail": "Invalid rules JSON"}, status_code=400)
+
+    if not isinstance(rules, dict):
+        return JSONResponse(content={"detail": "Missing rules"}, status_code=400)
+
+    try:
+        raw = json.dumps(rules, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        return JSONResponse(content={"detail": "Rules not JSON serializable"}, status_code=400)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    _ensure_admin_kv(conn)
+    now = _now_ts()
+    conn.execute(
+        "INSERT OR REPLACE INTO admin_kv(key, value, updated_at) VALUES (?, ?, ?)",
+        ("morning_brief_rules_v1", raw, int(now)),
+    )
+    conn.commit()
+    return JSONResponse(content={"ok": True, "key": "morning_brief_rules_v1", "updated_at": int(now)})
+
+
+@router.get("/api/admin/morning-brief/ai-stats")
+async def api_admin_morning_brief_ai_stats(request: Request):
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM rss_entries")
+        total_entries = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        total_entries = -1
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM rss_entry_ai_labels")
+        labeled_entries = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        labeled_entries = -1
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM rss_entry_ai_labels WHERE action='include'")
+        included_entries = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        included_entries = -1
+
+    try:
+        cur = conn.execute("SELECT MAX(labeled_at) FROM rss_entry_ai_labels")
+        last_labeled_at = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        last_labeled_at = 0
+
+    backlog_unlabeled = None
+    try:
+        cur = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM rss_entries e
+            LEFT JOIN rss_entry_ai_labels l
+              ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+            WHERE l.id IS NULL
+            """
+        )
+        backlog_unlabeled = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        backlog_unlabeled = None
+
+    include_ratio = None
+    try:
+        if labeled_entries and labeled_entries > 0 and included_entries is not None and included_entries >= 0:
+            include_ratio = float(included_entries) / float(labeled_entries)
+    except Exception:
+        include_ratio = None
+
+    return JSONResponse(
+        content={
+            "ok": True,
+            "total_entries": total_entries,
+            "labeled_entries": labeled_entries,
+            "included_entries": included_entries,
+            "include_ratio": include_ratio,
+            "backlog_unlabeled": backlog_unlabeled,
+            "last_labeled_at": last_labeled_at,
+            "ai_enabled": (os.environ.get("TREND_RADAR_MB_AI_ENABLED") or "0"),
+            "model": (os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus"),
+        }
+    )
+
+
+@router.post("/api/admin/morning-brief/ai-run")
+async def api_admin_morning_brief_ai_run(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    batch_size = body.get("batch_size")
+    force = body.get("force")
+
+    bs = 20
+    try:
+        bs = int(batch_size or 20)
+    except Exception:
+        bs = 20
+    bs = max(1, min(50, bs))
+
+    f = False
+    try:
+        f = bool(force)
+    except Exception:
+        f = False
+
+    runner = getattr(request.app.state, "mb_ai_run_once", None)
+    if not callable(runner):
+        return JSONResponse(content={"ok": False, "detail": "mb_ai_runner_not_available"}, status_code=400)
+
+    try:
+        result = await runner(batch_size=bs, force=f)
+        return JSONResponse(content={"ok": True, "result": result})
+    except Exception as e:
+        return JSONResponse(content={"ok": False, "error": str(e)[:500]}, status_code=500)
 
 
 @router.get("/api/rss-sources/warmup")

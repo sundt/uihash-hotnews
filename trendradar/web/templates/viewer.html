@@ -58,6 +58,9 @@
                 <button class="category-settings-btn" onclick="openCategorySettings()">
                     ⚙️ 栏目设置 <span class="new-badge" id="categorySettingsNewBadge">NEW</span>
                 </button>
+                <button class="category-settings-btn" onclick="openRssCatalogPreviewModal()">
+                    🔎 深入探索
+                </button>
                 <button class="filter-toggle-btn" type="button" onclick="window.open('https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe', '_blank')">
                     💡 建议
                 </button>
@@ -115,6 +118,7 @@
                                 {% for news in platform.news[:20] %}
                                 <li class="news-item" data-news-id="{{ news.stable_id }}" data-news-title="{{ news.display_title or news.title }}">
                                     <div class="news-item-content">
+                                        <input type="checkbox" class="news-checkbox" title="标记已读" onchange="markAsRead(this)" />
                                         <span class="news-index">{{ loop.index }}</span>
                                         <a class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                                             {{ news.display_title or news.title }}

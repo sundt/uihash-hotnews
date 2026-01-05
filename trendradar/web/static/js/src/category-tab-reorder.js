@@ -30,6 +30,7 @@ function _persistCategoryOrder(orderedCategoryIds) {
         return next;
     });
     config.categoryOrder = nextOrder;
+    config.__migrated_explore_ai_front_v1 = Date.now();
     TR.settings.saveCategoryConfig(config);
 }
 

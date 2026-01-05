@@ -110,6 +110,14 @@ services:
       - TREND_RADAR_ADMIN_TOKEN=${TREND_RADAR_ADMIN_TOKEN:-}
       - APP_VERSION=${TREND_RADAR_VIEWER_TAG}
       - CONFIG_REV=${CONFIG_REV:-}
+      # Morning Brief AI filtering (DashScope / Qwen)
+      - TREND_RADAR_MB_AI_ENABLED=${TREND_RADAR_MB_AI_ENABLED:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - TREND_RADAR_MB_AI_MODEL=${TREND_RADAR_MB_AI_MODEL:-qwen-flash}
+      - TREND_RADAR_MB_AI_ENDPOINT=${TREND_RADAR_MB_AI_ENDPOINT:-}
+      - TREND_RADAR_MB_AI_TIMEOUT_S=${TREND_RADAR_MB_AI_TIMEOUT_S:-30}
+      - TREND_RADAR_MB_AI_BATCH_SIZE=${TREND_RADAR_MB_AI_BATCH_SIZE:-20}
+      - TREND_RADAR_MB_AI_MAX_PER_HOUR=${TREND_RADAR_MB_AI_MAX_PER_HOUR:-200}
 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()"]

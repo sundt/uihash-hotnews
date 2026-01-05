@@ -117,9 +117,12 @@ export const settings = {
                 const name = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '')?.trim() || catId;
                 _defaultCategories[catId] = { id: catId, name, icon, isDefault: true };
             });
-            document.querySelectorAll('.platform-card').forEach(card => {
+            document.querySelectorAll('.platform-card:not(.tr-morning-brief-card)').forEach(card => {
                 const platformId = card.dataset.platform;
-                const platformName = card.querySelector('.platform-name')?.textContent?.trim()?.replace(/📱\s*/, '')?.split(' ')[0] || platformId;
+                const platformName = (card.querySelector('.platform-name')?.textContent || '')
+                    .replace(/NEW\s*$/i, '')
+                    .replace(/📱\s*/g, '')
+                    .trim() || platformId;
                 const tabPane = card.closest('.tab-pane');
                 const catId = tabPane?.id?.replace('tab-', '') || 'other';
                 _allPlatforms[platformId] = { id: platformId, name: platformName, defaultCategory: catId };
@@ -462,12 +465,12 @@ export const settings = {
 
         document.getElementById('editCategoryName').value = '';
         const platformField = document.getElementById('platformSelectField');
-        if (platformField) platformField.style.display = 'none';
+        if (platformField) platformField.style.display = '';
         const searchEl = document.getElementById('platformSearchInput');
         if (searchEl) searchEl.value = '';
         _platformSearchQuery = '';
 
-        this.renderPlatformSelectList([]);
+        this.renderPlatformSelectList([], true);
 
         TR.filter.setCategoryFilterEditorState('exclude', []);
 
@@ -574,7 +577,7 @@ export const settings = {
     setPlatformSearchQuery(query) {
         _platformSearchQuery = String(query || '');
         const platforms = this.getSelectedPlatforms();
-        this.renderPlatformSelectList(platforms);
+        this.renderPlatformSelectList(platforms, _isAddingNew === true);
     },
 
     bulkSelectPlatforms(mode) {
@@ -663,7 +666,7 @@ export const settings = {
             return false;
         }
 
-        if (!_isAddingNew && platforms.length === 0) {
+        if (platforms.length === 0) {
             alert('请至少选择一个平台');
             return false;
         }
