@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="admin-token" content="{{ token }}" />
+  <title>RSS Source Admin</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: #f9fafb; color: #111827; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    h2 { font-size: 16px; margin: 18px 0 10px; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    th { font-size: 12px; color: #6b7280; font-weight: 700; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .btn { border: 1px solid #d1d5db; background: #fff; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+    .btn-primary { border-color: #2563eb; background: #2563eb; color: white; }
+    .btn-danger { border-color: #dc2626; background: #dc2626; color: white; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    input[type=text] { border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; min-width: 220px; }
+    .kpi { display:flex; gap:10px; flex-wrap:wrap; }
+    .kpi .pill { border:1px solid #e5e7eb; border-radius:999px; padding:4px 10px; font-size:12px; color:#374151; background:#f9fafb; }
+    .bar { height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden; min-width: 120px; }
+    .bar > div { height: 100%; background: #2563eb; border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>RSS Source Admin</h1>
+    <div class="muted">This page requires <code>?token=...</code> or <code>X-Admin-Token</code>.</div>
+
+    <h2>CSV Paste Import</h2>
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px;">
+        Paste CSV rows and import into <code>rss_sources</code>.
+      </div>
+      <div class="muted" style="margin-bottom:8px;">
+        Supported formats:
+        <div style="margin-top:4px;">
+          <div><b>Headerless fixed-order (8 columns)</b>: name,url,seed_last_updated,category,feed_type,country,language,source</div>
+          <div><b>Chinese headers</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源</div>
+        </div>
+      </div>
+      <textarea id="csv-import-text" style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;" placeholder="Example:\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加"></textarea>
+      <div style="height:10px;"></div>
+      <div class="row" style="align-items:center;">
+        <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
+        <button class="btn btn-primary" onclick="commitCsvImport()">Commit</button>
+        <button class="btn btn-danger" onclick="bulkDisableByUrls()">Bulk Disable (From URLs)</button>
+        <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">Bulk Enable Catalog (All)</button>
+        <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
+        <button class="btn btn-primary" onclick="exportCatalogAll()">Export Catalog (All)</button>
+        <span class="muted" id="csv-import-status"></span>
+      </div>
+      <div style="height:10px;"></div>
+      <div id="csv-import-result"></div>
+    </div>
+
+    <h2>Pending Requests</h2>
+    <div class="card">
+      {% if pending and pending|length > 0 %}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>URL</th>
+            <th>Note</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in pending %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td style="max-width:240px; word-break:break-word;"><b>{{ r.title }}</b></td>
+            <td style="max-width:520px; word-break:break-all;">
+              <div><b>{{ r.host }}</b></div>
+              <div class="muted">{{ r.url }}</div>
+            </td>
+            <td style="max-width:280px; word-break:break-word;">{{ r.note }}</td>
+            <td>
+              <div class="row">
+                <input type="text" id="name-{{ r.id }}" placeholder="Source name (optional)" />
+                <button class="btn btn-primary" data-id="{{ r.id }}" onclick="approveReq(this.dataset.id)">Approve</button>
+                <input type="text" id="reason-{{ r.id }}" placeholder="Reject reason" />
+                <button class="btn btn-danger" data-id="{{ r.id }}" onclick="rejectReq(this.dataset.id)">Reject</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <div class="muted">No pending requests.</div>
+      {% endif %}
+    </div>
+
+    <h2>Rejected Requests</h2>
+    <div class="card">
+      {% if rejected and rejected|length > 0 %}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>URL</th>
+            <th>Reason</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rejected %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td style="max-width:240px; word-break:break-word;"><b>{{ r.title }}</b></td>
+            <td style="max-width:520px; word-break:break-all;">
+              <div><b>{{ r.host }}</b></div>
+              <div class="muted">{{ r.url }}</div>
+            </td>
+            <td style="max-width:280px; word-break:break-word;">{{ r.reason }}</td>
+            <td>
+              <div class="row">
+                <button class="btn" data-id="{{ r.id }}" onclick="reopenReq(this.dataset.id)">Reopen</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <div class="muted">No rejected requests.</div>
+      {% endif %}
+    </div>
+
+    <h2>Catalog (All)</h2>
+    <div class="card">
+      {% if sources and sources|length > 0 %}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>标题</th>
+            <th>订阅地址</th>
+            <th>最后更新</th>
+            <th>分类</th>
+            <th>类型</th>
+            <th>国家</th>
+            <th>语言</th>
+            <th>来源</th>
+            <th>Subscribed</th>
+            <th>Added</th>
+            <th>Entries</th>
+            <th>Latest</th>
+            <th>Enabled</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sources %}
+          <tr>
+            <td class="muted">{{ s.id }}</td>
+            <td style="max-width:240px; word-break:break-word;"><b>{{ s.name }}</b></td>
+            <td style="max-width:520px; word-break:break-all;" class="muted">{{ s.url }}</td>
+            <td class="muted">{{ s.last_updated_time or '' }}</td>
+            <td class="muted">{{ s.category or '' }}</td>
+            <td class="muted">{{ s.feed_type or '' }}</td>
+            <td class="muted">{{ s.country or '' }}</td>
+            <td class="muted">{{ s.language or '' }}</td>
+            <td class="muted">{{ s.source or '' }}</td>
+            <td class="muted">{{ s.subscribed_count or 0 }}</td>
+            <td class="muted">{{ s.added_count or 0 }}</td>
+            <td class="muted">{{ s.entries_count or 0 }}</td>
+            <td class="muted">{{ s.latest_entry_time or '' }}</td>
+            <td id="src-enabled-{{ s.id }}">{{ 1 if s.enabled else 0 }}</td>
+            <td>
+              <div class="row">
+                <button class="btn" data-id="{{ s.id }}" onclick="warmupSource(this)">手动抓取</button>
+                <button class="btn" data-id="{{ s.id }}" data-enabled="{{ 1 if s.enabled else 0 }}" onclick="toggleSourceEnabled(this)">
+                  {% if s.enabled %}Disable{% else %}Enable{% endif %}
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <div class="muted">Catalog is empty.</div>
+      {% endif %}
+    </div>
+
+    <h2>RSS Usage</h2>
+    <div class="card">
+      <div class="row" style="align-items:center;">
+        <input type="text" id="usage-days" value="7" />
+        <button class="btn btn-primary" onclick="loadUsage()">Load</button>
+        <span class="muted" id="usage-status"></span>
+      </div>
+      <div style="height:10px;"></div>
+      <div class="kpi" id="usage-kpi" style="display:none;"></div>
+      <div style="height:10px;"></div>
+      <div id="usage-table"></div>
+    </div>
+  </div>
+
+  <script>
+    const token = document.querySelector('meta[name="admin-token"]')?.getAttribute('content') || '';
+
+    let _csvPreviewHash = '';
+    let _csvPreviewText = '';
+
+    function _setCsvImportStatus(msg) {
+      const el = document.getElementById('csv-import-status');
+      if (!el) return;
+      el.textContent = msg || '';
+    }
+
+    function _escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    async function toggleSourceEnabled(btn) {
+      const sourceId = btn?.dataset?.id || '';
+      const curEnabled = String(btn?.dataset?.enabled || '').trim() === '1';
+      const nextEnabled = !curEnabled;
+      if (!sourceId) return;
+
+      try {
+        btn.disabled = true;
+        const resp = await fetch('/api/admin/rss-sources/set-enabled', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_id: sourceId, enabled: nextEnabled ? 1 : 0 })
+        });
+        const payload = await resp.json();
+        if (!resp.ok) throw new Error(payload?.detail || 'Failed');
+
+        btn.dataset.enabled = nextEnabled ? '1' : '0';
+        btn.textContent = nextEnabled ? 'Disable' : 'Enable';
+        const cell = document.getElementById(`src-enabled-${sourceId}`);
+        if (cell) cell.textContent = nextEnabled ? '1' : '0';
+      } catch (e) {
+        alert(e?.message || String(e));
+      } finally {
+        try { btn.disabled = false; } catch (e) { /* ignore */ }
+      }
+    }
+
+    async function warmupSource(btnOrSourceId) {
+      const btn = (btnOrSourceId && typeof btnOrSourceId === 'object' && 'dataset' in btnOrSourceId) ? btnOrSourceId : null;
+      const sid = btn ? String(btn?.dataset?.id || '').trim() : String(btnOrSourceId || '').trim();
+      if (!sid) return;
+
+      const originalBtnText = btn ? String(btn.textContent || '') : '';
+      try {
+        if (!token) {
+          _setCsvImportStatus('抓取失败: 缺少 admin token');
+          alert('Missing admin token. Use ?token=... to open this page or configure TREND_RADAR_ADMIN_TOKEN.');
+          return;
+        }
+
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '抓取中...';
+        }
+        _setCsvImportStatus(`抓取中: ${sid} ...`);
+
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 15000);
+        const resp = await fetch('/api/rss-sources/warmup?wait_ms=1200', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_ids: [sid], priority: 'high' }),
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(t));
+
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || `Failed (${resp.status})`);
+
+        const detail = String(payload?.detail || '').toLowerCase();
+        if (detail.includes('warmup not available')) {
+          throw new Error(String(payload?.detail || 'warmup not available'));
+        }
+        if (Number(payload?.queued || 0) <= 0) {
+          throw new Error(String(payload?.detail || 'No task queued'));
+        }
+
+        const res0 = Array.isArray(payload?.results) ? payload.results[0] : null;
+        if (res0 && res0.ok === false && res0.error) {
+          throw new Error(String(res0.error));
+        }
+
+        _setCsvImportStatus(`抓取完成: ${sid}`);
+        if (btn) btn.textContent = '已触发';
+      } catch (e) {
+        _setCsvImportStatus(`抓取失败: ${sid}`);
+        const name = String(e?.name || '');
+        if (name === 'AbortError') {
+          alert('Request timeout (15s).');
+        } else {
+          alert(e?.message || String(e));
+        }
+        if (btn) btn.textContent = originalBtnText || '手动抓取';
+      } finally {
+        if (btn) {
+          try { btn.disabled = false; } catch (e) { /* ignore */ }
+        }
+      }
+    }
+
+    async function exportCatalogAll() {
+      try {
+        _setCsvImportStatus('Exporting...');
+        const resp = await fetch('/api/admin/rss-sources/export', {
+          method: 'GET',
+          headers: {
+            'X-Admin-Token': token
+          }
+        });
+        if (!resp.ok) {
+          const payload = await resp.json().catch(() => ({}));
+          throw new Error(payload?.detail || 'Export failed');
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'admin_rss_catalog_all.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        _setCsvImportStatus('Exported');
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
+    }
+
+    async function bulkEnableCatalogAll() {
+      const ok = confirm('Enable ALL disabled rss_sources in Catalog (All)?');
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Enabling...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-enable', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({})
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk enable failed');
+        alert(`Enabled ${Number(payload?.enabled || 0)} source(s).`);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
+    }
+
+    function _parseUrlsFromTextareaText(text) {
+      const out = [];
+      const seen = new Set();
+      const lines = String(text || '').split(/\r?\n/);
+      for (const lineRaw of lines) {
+        const line = String(lineRaw || '').trim();
+        if (!line) continue;
+
+        // Support:
+        // 1) plain URL per line
+        // 2) CSV row where 2nd column is URL
+        let candidate = line;
+        if (line.includes(',')) {
+          const parts = line.split(',').map((x) => String(x || '').trim());
+          if (parts.length >= 2 && (parts[1] || '').startsWith('http')) {
+            candidate = parts[1];
+          }
+        }
+        if (!candidate.startsWith('http://') && !candidate.startsWith('https://')) {
+          continue;
+        }
+        if (seen.has(candidate)) continue;
+        seen.add(candidate);
+        out.push(candidate);
+      }
+      return out;
+    }
+
+    async function bulkDisableByUrls() {
+      const text = document.getElementById('csv-import-text')?.value || '';
+      const urls = _parseUrlsFromTextareaText(text);
+      if (!urls.length) {
+        alert('No URL found in textarea. Paste one URL per line, or CSV rows with URL in the 2nd column.');
+        return;
+      }
+      const ok = confirm(`Disable sources matching ${urls.length} URL(s)? (Only matched enabled sources will be disabled)`);
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Disabling by URLs...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-disable-by-urls', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ urls })
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk disable by URLs failed');
+
+        const disabled = Number(payload?.disabled || 0);
+        const matched = Number(payload?.matched || 0);
+        const notFound = Array.isArray(payload?.not_found) ? payload.not_found : [];
+        const invalid = Array.isArray(payload?.invalid) ? payload.invalid : [];
+        let msg = `Matched ${matched} URL(s), disabled ${disabled} source(s).`;
+        if (invalid.length) msg += `\nInvalid: ${invalid.length}`;
+        if (notFound.length) msg += `\nNot found: ${notFound.length}`;
+        alert(msg);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
+    }
+
+    function _renderCsvImportResult(payload) {
+      const el = document.getElementById('csv-import-result');
+      if (!el) return;
+      const fmt = payload?.detected_format || '';
+      const hash = payload?.preview_hash || '';
+      const summary = payload?.summary || {};
+      const expected = payload?.expected || {};
+      const invalid = Array.isArray(payload?.invalid_rows) ? payload.invalid_rows : [];
+      const dups = Array.isArray(payload?.duplicate_rows) ? payload.duplicate_rows : [];
+      const sample = Array.isArray(payload?.sample) ? payload.sample : [];
+
+      const expHeaderless = Array.isArray(expected?.headerless_fixed_order) ? expected.headerless_fixed_order.join(', ') : '';
+      const expZh = Array.isArray(expected?.headered_zh) ? expected.headered_zh.join(', ') : '';
+
+      const kpiHtml = [
+        `<span class="pill">format=${_escapeHtml(fmt)}</span>`,
+        hash ? `<span class="pill">preview_hash=${_escapeHtml(hash)}</span>` : '',
+        `<span class="pill">total_rows=${Number(summary.total_rows || 0)}</span>`,
+        `<span class="pill">unique_urls=${Number(summary.unique_urls || 0)}</span>`,
+        `<span class="pill">inserted=${Number(summary.inserted || 0)}</span>`,
+        `<span class="pill">updated=${Number(summary.updated || 0)}</span>`,
+        `<span class="pill">duplicates=${Number(summary.duplicates || 0)}</span>`,
+        `<span class="pill">invalid=${Number(summary.invalid || 0)}</span>`
+      ].filter(Boolean).join('');
+
+      const invalidHtml = invalid.length ? `
+        <div style="margin-top:10px;">
+          <div style="font-weight:700;">Invalid Rows (showing up to 50)</div>
+          <table style="margin-top:6px;">
+            <thead><tr><th>line_no</th><th>error</th></tr></thead>
+            <tbody>
+              ${invalid.map((x) => `<tr><td class="muted">${_escapeHtml(x.line_no)}</td><td>${_escapeHtml(x.error)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '';
+
+      const dupHtml = dups.length ? `
+        <div style="margin-top:10px;">
+          <div style="font-weight:700;">Duplicate Rows (showing up to 50)</div>
+          <table style="margin-top:6px;">
+            <thead><tr><th>line_no</th><th>url</th><th>first_line_no</th></tr></thead>
+            <tbody>
+              ${dups.map((x) => `<tr><td class="muted">${_escapeHtml(x.line_no)}</td><td class="muted" style="max-width:520px;word-break:break-all;">${_escapeHtml(x.url)}</td><td class="muted">${_escapeHtml(x.first_line_no)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '';
+
+      const sampleHtml = sample.length ? `
+        <div style="margin-top:10px;">
+          <div style="font-weight:700;">Sample (first 10 unique rows)</div>
+          <table style="margin-top:6px;">
+            <thead><tr><th>action</th><th>name</th><th>url</th><th>category</th><th>feed_type</th><th>country</th><th>language</th><th>source</th></tr></thead>
+            <tbody>
+              ${sample.map((x) => `
+                <tr>
+                  <td class="muted">${_escapeHtml(x.action)}</td>
+                  <td><b>${_escapeHtml(x.name)}</b></td>
+                  <td class="muted" style="max-width:420px;word-break:break-all;">${_escapeHtml(x.url)}</td>
+                  <td class="muted">${_escapeHtml(x.category)}</td>
+                  <td class="muted">${_escapeHtml(x.feed_type)}</td>
+                  <td class="muted">${_escapeHtml(x.country)}</td>
+                  <td class="muted">${_escapeHtml(x.language)}</td>
+                  <td class="muted">${_escapeHtml(x.source)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '';
+
+      el.innerHTML = `
+        <div class="kpi" style="display:flex;">${kpiHtml}</div>
+        <div style="margin-top:8px;" class="muted">
+          <div><b>Expected (headerless)</b>: ${_escapeHtml(expHeaderless)}</div>
+          <div><b>Expected (headered zh)</b>: ${_escapeHtml(expZh)}</div>
+        </div>
+        ${invalidHtml}
+        ${dupHtml}
+        ${sampleHtml}
+      `;
+    }
+
+    async function previewCsvImport() {
+      const text = document.getElementById('csv-import-text')?.value || '';
+      _setCsvImportStatus('Previewing...');
+      const el = document.getElementById('csv-import-result');
+      if (el) el.innerHTML = '';
+      _csvPreviewHash = '';
+      _csvPreviewText = '';
+      const resp = await fetch(`/api/admin/rss-sources/import-csv/preview?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv_text: text })
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        _setCsvImportStatus(payload?.detail || 'Preview failed');
+        if (el) el.innerHTML = `<div style="color:#dc2626;">${_escapeHtml(payload?.detail || 'Preview failed')}</div>`;
+        return;
+      }
+      _csvPreviewHash = String(payload?.preview_hash || '');
+      _csvPreviewText = String(text || '');
+      _setCsvImportStatus('Preview ready');
+      _renderCsvImportResult(payload);
+    }
+
+    async function commitCsvImport() {
+      const text = document.getElementById('csv-import-text')?.value || '';
+      if (!_csvPreviewHash) {
+        alert('Please Preview first.');
+        return;
+      }
+      if (String(text || '') !== String(_csvPreviewText || '')) {
+        alert('CSV text changed since preview. Please Preview again.');
+        return;
+      }
+      const ok = confirm('Commit import into rss_sources?');
+      if (!ok) return;
+      _setCsvImportStatus('Committing...');
+      const resp = await fetch(`/api/admin/rss-sources/import-csv/commit?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv_text: text, preview_hash: _csvPreviewHash })
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        _setCsvImportStatus(payload?.detail || 'Commit failed');
+        alert(payload?.detail || 'Commit failed');
+        return;
+      }
+      _setCsvImportStatus('Committed');
+      location.reload();
+    }
+
+    async function bulkDisableCatalogAll() {
+      const ok = confirm('Disable ALL enabled rss_sources in Catalog (All)?');
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Disabling...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-disable', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({})
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk disable failed');
+        alert(`Disabled ${Number(payload?.disabled || 0)} source(s).`);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
+    }
+
+    async function approveReq(id) {
+      id = String(id || '').trim();
+      const name = document.getElementById(`name-${id}`)?.value || '';
+      const resp = await fetch(`/api/admin/rss-source-requests/${id}/approve?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        alert(t || 'Approve failed');
+        return;
+      }
+      location.reload();
+    }
+
+    async function rejectReq(id) {
+      id = String(id || '').trim();
+      const reason = document.getElementById(`reason-${id}`)?.value || '';
+      const resp = await fetch(`/api/admin/rss-source-requests/${id}/reject?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        alert(t || 'Reject failed');
+        return;
+      }
+      location.reload();
+    }
+
+    async function reopenReq(id) {
+      id = String(id || '').trim();
+      const resp = await fetch(`/api/admin/rss-source-requests/${id}/reopen?token=${encodeURIComponent(token)}`, {
+        method: 'POST'
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        alert(t || 'Reopen failed');
+        return;
+      }
+      location.reload();
+    }
+
+    function _setUsageStatus(msg) {
+      const el = document.getElementById('usage-status');
+      if (!el) return;
+      el.textContent = msg || '';
+    }
+
+    function _n(v) {
+      const x = Number(v);
+      if (!Number.isFinite(x)) return 0;
+      return x;
+    }
+
+    async function loadUsage() {
+      const daysRaw = document.getElementById('usage-days')?.value || '7';
+      const days = Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 7));
+      _setUsageStatus('Loading...');
+      const tableEl = document.getElementById('usage-table');
+      const kpiEl = document.getElementById('usage-kpi');
+      if (tableEl) tableEl.innerHTML = '';
+      if (kpiEl) { kpiEl.style.display = 'none'; kpiEl.innerHTML = ''; }
+
+      const resp = await fetch(`/api/admin/rss-usage?days=${encodeURIComponent(String(days))}&token=${encodeURIComponent(token)}`);
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        _setUsageStatus(payload?.detail || 'Load failed');
+        return;
+      }
+
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      const maxReq = items.reduce((m, x) => Math.max(m, _n(x?.requests)), 0) || 1;
+      const totalReq = items.reduce((s, x) => s + _n(x?.requests), 0);
+      const totalUsers = items.reduce((s, x) => s + _n(x?.unique_clients), 0);
+      const maxUsers = items.reduce((m, x) => Math.max(m, _n(x?.unique_clients)), 0);
+      _setUsageStatus(`Loaded ${items.length} day(s)`);
+
+      if (kpiEl) {
+        kpiEl.style.display = 'flex';
+        kpiEl.innerHTML = [
+          `<span class="pill">days=${days}</span>`,
+          `<span class="pill">total_requests=${totalReq}</span>`,
+          `<span class="pill">sum_unique_clients=${totalUsers}</span>`,
+          `<span class="pill">max_daily_unique_clients=${maxUsers}</span>`
+        ].join('');
+      }
+
+      if (!tableEl) return;
+      if (items.length === 0) {
+        tableEl.innerHTML = '<div class="muted">No data.</div>';
+        return;
+      }
+
+      const rows = items.map((x) => {
+        const day = String(x?.day || '');
+        const req = _n(x?.requests);
+        const users = _n(x?.unique_clients);
+        const avgSubs = _n(x?.avg_subs).toFixed(2);
+        const maxSubs = _n(x?.max_subs);
+        const pct = Math.max(0, Math.min(100, Math.round(req / maxReq * 100)));
+        return `
+          <tr>
+            <td><b>${day}</b></td>
+            <td>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="bar"><div style="width:${pct}%;"></div></div>
+                <span>${req}</span>
+              </div>
+            </td>
+            <td>${users}</td>
+            <td>${avgSubs}</td>
+            <td>${maxSubs}</td>
+          </tr>
+        `;
+      }).join('');
+
+      tableEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Requests</th>
+              <th>Unique Clients (Approx)</th>
+              <th>Avg Subs</th>
+              <th>Max Subs</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+  </script>
+</body>
+</html>
