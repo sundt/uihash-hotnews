@@ -90,6 +90,16 @@ function _ensureLayout() {
     const grid = pane.querySelector('.platform-grid');
     if (!grid) return false;
 
+    try {
+        if (grid.dataset && grid.dataset.mbInjected === '1') return true;
+        if (grid.getAttribute && grid.getAttribute('data-mb-injected') === '1') {
+            if (grid.dataset) grid.dataset.mbInjected = '1';
+            return true;
+        }
+    } catch (e) {
+        // ignore
+    }
+
     if (grid.dataset && grid.dataset.mbInjected === '1') return true;
 
     grid.innerHTML = `

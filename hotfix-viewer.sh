@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-SERVER_USER="root"
-SERVER_HOST="120.77.222.205"
-SSH_PORT="52222"
-PROJECT_PATH="~/hotnews"
+SERVER_USER="${SERVER_USER:-root}"
+SERVER_HOST="${SERVER_HOST:-120.77.222.205}"
+SSH_PORT="${SSH_PORT:-52222}"
+PROJECT_PATH="${PROJECT_PATH:-~/hotnews}"
 
 CONTROL_PATH="/tmp/hotnews-ssh-${SERVER_USER}@${SERVER_HOST}-${SSH_PORT}"
 SSH_OPTS="-p ${SSH_PORT} -o ControlMaster=auto -o ControlPersist=600 -o ControlPath=${CONTROL_PATH}"
