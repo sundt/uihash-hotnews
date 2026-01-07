@@ -24,6 +24,11 @@
     .kpi .pill { border:1px solid #e5e7eb; border-radius:999px; padding:4px 10px; font-size:12px; color:#374151; background:#f9fafb; }
     .bar { height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden; min-width: 120px; }
     .bar > div { height: 100%; background: #2563eb; border-radius: 999px; }
+    .badge { display:inline-flex; align-items:center; border:1px solid #e5e7eb; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700; }
+    .badge-ok { color:#065f46; background:#ecfdf5; border-color:#a7f3d0; }
+    .badge-warn { color:#92400e; background:#fffbeb; border-color:#fcd34d; }
+    .badge-bad { color:#991b1b; background:#fef2f2; border-color:#fecaca; }
+    .badge-off { color:#374151; background:#f3f4f6; border-color:#e5e7eb; }
   </style>
 </head>
 <body>
@@ -151,11 +156,46 @@
     </div>
 
     <h2>Catalog (All)</h2>
-    <div class="card">
+    <div class="card" id="rss-catalog-all">
+      <div class="kpi" id="catalog-kpi" style="margin-bottom:10px;">
+        <span class="pill" title="异常总数：包含 FAIL / BACKOFF / NEVER_TRIED / OK_EMPTY / STALE">abnormal(异常)={{ health_abnormal_count or 0 }}</span>
+        <span class="pill" title="正常：已抓取成功且有内容，且 30 天内有更新">OK(正常)={{ (health_kpi or {}).get('OK', 0) }}</span>
+        <span class="pill" title="失败：抓取/解析失败过（fail_count > 0）">FAIL(失败)={{ (health_kpi or {}).get('FAIL', 0) }}</span>
+        <span class="pill" title="退避：当前处于 backoff，暂时不会频繁重试（backoff_until > now）">BACKOFF(退避)={{ (health_kpi or {}).get('BACKOFF', 0) }}</span>
+        <span class="pill" title="从未尝试：还没有抓取过（last_attempt_at=0）">NEVER_TRIED(未尝试)={{ (health_kpi or {}).get('NEVER_TRIED', 0) }}</span>
+        <span class="pill" title="抓取成功但为空：尝试过抓取但 entries=0（视为异常）">OK_EMPTY(空)={{ (health_kpi or {}).get('OK_EMPTY', 0) }}</span>
+        <span class="pill" title="长期不更新：最新条目时间超过 30 天（视为异常）">STALE(长期不更新)={{ (health_kpi or {}).get('STALE', 0) }}</span>
+        <span class="pill" title="已禁用：enabled=0">DISABLED(已禁用)={{ (health_kpi or {}).get('DISABLED', 0) }}</span>
+      </div>
+
+      <div class="row" style="align-items:center; margin-bottom:10px;">
+        <input type="text" id="catalog-search" placeholder="Search: name/url/host/category/source" />
+        <button class="btn" data-filter="ALL" onclick="setCatalogFilter('ALL')" title="显示全部来源">All(全部)</button>
+        <button class="btn btn-primary" data-filter="ABNORMAL" onclick="setCatalogFilter('ABNORMAL')" title="异常：FAIL / BACKOFF / NEVER_TRIED / OK_EMPTY / STALE">Abnormal(异常)</button>
+        <button class="btn" data-filter="OK" onclick="setCatalogFilter('OK')" title="正常：已抓取成功且有内容，且 30 天内有更新">OK(正常)</button>
+        <button class="btn" data-filter="FAIL" onclick="setCatalogFilter('FAIL')" title="失败：抓取/解析失败过（fail_count > 0）">FAIL(失败)</button>
+        <button class="btn" data-filter="BACKOFF" onclick="setCatalogFilter('BACKOFF')" title="退避：backoff_until > now">BACKOFF(退避)</button>
+        <button class="btn" data-filter="NEVER_TRIED" onclick="setCatalogFilter('NEVER_TRIED')" title="从未尝试：last_attempt_at=0">NEVER_TRIED(未尝试)</button>
+        <button class="btn" data-filter="OK_EMPTY" onclick="setCatalogFilter('OK_EMPTY')" title="抓取成功但为空：entries=0（异常）">OK_EMPTY(空)</button>
+        <button class="btn" data-filter="STALE" onclick="setCatalogFilter('STALE')" title="长期不更新：最新条目时间超过 30 天（异常）">STALE(长期不更新)</button>
+        <button class="btn" data-filter="DISABLED" onclick="setCatalogFilter('DISABLED')" title="已禁用：enabled=0">DISABLED(已禁用)</button>
+      </div>
+
+      <div class="row" style="align-items:center; margin-bottom:10px;">
+        <span class="muted" id="bulk-selection-info">Selected: 0</span>
+        <button class="btn" onclick="bulkWarmupSelected()">批量抓取</button>
+        <button class="btn" onclick="bulkClearBackoffAndRetry()">批量清退避并重试</button>
+        <button class="btn" onclick="bulkSetEnabledSelected(1)">批量启用</button>
+        <button class="btn" onclick="bulkSetEnabledSelected(0)">批量禁用</button>
+        <button class="btn btn-danger" onclick="bulkDeleteSelected()">批量删除</button>
+      </div>
+
       {% if sources and sources|length > 0 %}
       <table>
         <thead>
           <tr>
+            <th style="width:44px;"><input type="checkbox" id="select-all-visible" onclick="toggleSelectAllVisible(this)" /></th>
+            <th>Health</th>
             <th>ID</th>
             <th>标题</th>
             <th>订阅地址</th>
@@ -169,16 +209,39 @@
             <th>Added</th>
             <th>Entries</th>
             <th>Latest</th>
+            <th>Last Attempt</th>
+            <th>Fail</th>
+            <th>Backoff Until</th>
+            <th>Last Error</th>
             <th>Enabled</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for s in sources %}
-          <tr>
+          <tr data-health="{{ s.health_state or '' }}" data-abnormal="{{ 1 if s.is_abnormal else 0 }}" data-search="{{ (s.name ~ ' ' ~ s.url ~ ' ' ~ s.host ~ ' ' ~ (s.category or '') ~ ' ' ~ (s.source or '') )|lower }}">
+            <td>
+              <input type="checkbox" class="rss-src-select" data-id="{{ s.id }}" onchange="updateBulkSelectionInfo()" />
+            </td>
+            <td>
+              {% set hs = s.health_state or '' %}
+              {% if hs == 'OK' %}
+                <span class="badge badge-ok">OK</span>
+              {% elif hs in ['FAIL'] %}
+                <span class="badge badge-bad">FAIL</span>
+              {% elif hs in ['BACKOFF','NEVER_TRIED','OK_EMPTY','STALE'] %}
+                <span class="badge badge-warn">{{ hs }}</span>
+              {% elif hs == 'DISABLED' %}
+                <span class="badge badge-off">DISABLED</span>
+              {% else %}
+                <span class="badge badge-off">{{ hs }}</span>
+              {% endif %}
+            </td>
             <td class="muted">{{ s.id }}</td>
             <td style="max-width:240px; word-break:break-word;"><b>{{ s.name }}</b></td>
-            <td style="max-width:520px; word-break:break-all;" class="muted">{{ s.url }}</td>
+            <td style="max-width:520px; word-break:break-all;" class="muted">
+              <a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.url }}</a>
+            </td>
             <td class="muted">{{ s.last_updated_time or '' }}</td>
             <td class="muted">{{ s.category or '' }}</td>
             <td class="muted">{{ s.feed_type or '' }}</td>
@@ -189,10 +252,26 @@
             <td class="muted">{{ s.added_count or 0 }}</td>
             <td class="muted">{{ s.entries_count or 0 }}</td>
             <td class="muted">{{ s.latest_entry_time or '' }}</td>
+            <td class="muted">{{ s.last_attempt_time or '' }}</td>
+            <td class="muted">{{ s.fail_count or 0 }}</td>
+            <td class="muted">{{ s.backoff_until_time or '' }}</td>
+            <td class="muted" style="max-width:360px; word-break:break-word;">
+              {{ (s.last_error_reason or '')[:120] }}
+              {% if s.url %}
+                <span style="margin-left:6px;"><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">open</a></span>
+              {% endif %}
+            </td>
             <td id="src-enabled-{{ s.id }}">{{ 1 if s.enabled else 0 }}</td>
             <td>
               <div class="row">
                 <button class="btn" data-id="{{ s.id }}" onclick="warmupSource(this)">手动抓取</button>
+                <button class="btn" data-id="{{ s.id }}" onclick="clearBackoffAndRetry(this)" title="清除 backoff/fail 计数并立即重试"
+                  {% if (s.health_state or '') not in ['BACKOFF','FAIL'] %}style="display:none;"{% endif %}>
+                  清退避并重试
+                </button>
+                <button class="btn btn-danger" data-id="{{ s.id }}" data-name="{{ s.name }}" onclick="deleteSource(this)" title="删除 RSS 源（同时清理该源的 entries/订阅引用）">
+                  Delete
+                </button>
                 <button class="btn" data-id="{{ s.id }}" data-enabled="{{ 1 if s.enabled else 0 }}" onclick="toggleSourceEnabled(this)">
                   {% if s.enabled %}Disable{% else %}Enable{% endif %}
                 </button>
@@ -224,8 +303,298 @@
   <script>
     const token = document.querySelector('meta[name="admin-token"]')?.getAttribute('content') || '';
 
+    let _catalogFilter = 'ABNORMAL';
+
+    function _getCatalogContainer() {
+      return document.getElementById('rss-catalog-all');
+    }
+
+    function _getCatalogRows() {
+      const c = _getCatalogContainer();
+      if (!c) return [];
+      return Array.from(c.querySelectorAll('table tbody tr[data-health]'));
+    }
+
+    function _rowIsVisible(tr) {
+      if (!tr) return false;
+      const v = String(tr.style?.display || '');
+      return v !== 'none';
+    }
+
+    function getSelectedSourceIds() {
+      const ids = [];
+      const rows = _getCatalogRows();
+      for (const tr of rows) {
+        const cb = tr.querySelector('input.rss-src-select');
+        if (!cb) continue;
+        if (cb.checked) {
+          const sid = String(cb.dataset?.id || '').trim();
+          if (sid) ids.push(sid);
+        }
+      }
+      return ids;
+    }
+
+    function updateBulkSelectionInfo() {
+      const el = document.getElementById('bulk-selection-info');
+      if (!el) return;
+      const ids = getSelectedSourceIds();
+      el.textContent = `Selected: ${ids.length}`;
+
+      const head = document.getElementById('select-all-visible');
+      if (head) {
+        const rows = _getCatalogRows().filter(r => _rowIsVisible(r));
+        let visibleCount = 0;
+        let checkedCount = 0;
+        for (const tr of rows) {
+          const cb = tr.querySelector('input.rss-src-select');
+          if (!cb) continue;
+          visibleCount += 1;
+          if (cb.checked) checkedCount += 1;
+        }
+        head.checked = visibleCount > 0 && checkedCount === visibleCount;
+      }
+    }
+
+    function toggleSelectAllVisible(head) {
+      const checked = !!head?.checked;
+      const rows = _getCatalogRows();
+      for (const tr of rows) {
+        if (!_rowIsVisible(tr)) continue;
+        const cb = tr.querySelector('input.rss-src-select');
+        if (!cb) continue;
+        cb.checked = checked;
+      }
+      updateBulkSelectionInfo();
+    }
+
+    async function _bulkPostJson(url, payload) {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Token': token
+        },
+        body: JSON.stringify(payload || {})
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.detail || `Failed (${resp.status})`);
+      return data;
+    }
+
+    async function _warmupIds(ids, askConfirm) {
+      const list = Array.isArray(ids) ? ids : [];
+      if (!list.length) { alert('No rows selected.'); return; }
+      if (!token) { alert('Missing admin token. Use ?token=...'); return; }
+      if (askConfirm) {
+        const ok = confirm(`批量抓取选中源？\ncount=${list.length}`);
+        if (!ok) return;
+      }
+      _setCsvImportStatus(`批量抓取中... count=${list.length}`);
+
+      const chunk = 25;
+      let queued = 0;
+      for (let i = 0; i < list.length; i += chunk) {
+        const part = list.slice(i, i + chunk);
+        const resp = await fetch('/api/rss-sources/warmup?wait_ms=1200', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_ids: part, priority: 'high' })
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || `Failed (${resp.status})`);
+        queued += Number(payload?.queued || 0);
+      }
+      _setCsvImportStatus(`批量抓取已触发: queued=${queued}`);
+    }
+
+    async function bulkWarmupSelected() {
+      const ids = getSelectedSourceIds();
+      await _warmupIds(ids, true);
+    }
+
+    async function bulkClearBackoffAndRetry() {
+      const ids = getSelectedSourceIds();
+      if (!ids.length) { alert('No rows selected.'); return; }
+      if (!token) { alert('Missing admin token. Use ?token=...'); return; }
+      const ok = confirm(`批量清除退避并重试抓取？\ncount=${ids.length}`);
+      if (!ok) return;
+      _setCsvImportStatus(`批量清退避中... count=${ids.length}`);
+
+      await _bulkPostJson('/api/admin/rss-sources/clear-backoff-bulk', { source_ids: ids });
+      await _warmupIds(ids, false);
+    }
+
+    async function bulkSetEnabledSelected(enabled) {
+      const ids = getSelectedSourceIds();
+      if (!ids.length) { alert('No rows selected.'); return; }
+      if (!token) { alert('Missing admin token. Use ?token=...'); return; }
+      const label = enabled ? '启用' : '禁用';
+      const ok = confirm(`批量${label}选中源？\ncount=${ids.length}`);
+      if (!ok) return;
+      _setCsvImportStatus(`批量${label}中... count=${ids.length}`);
+      await _bulkPostJson('/api/admin/rss-sources/set-enabled-bulk', { source_ids: ids, enabled: enabled ? 1 : 0 });
+      _setCsvImportStatus(`批量${label}完成: count=${ids.length}`);
+      try { window.location.reload(); } catch (e) {}
+    }
+
+    async function bulkDeleteSelected() {
+      const ids = getSelectedSourceIds();
+      if (!ids.length) { alert('No rows selected.'); return; }
+      if (!token) { alert('Missing admin token. Use ?token=...'); return; }
+      const ok = confirm(`确认批量删除选中源？\ncount=${ids.length}\n\n将同时删除 entries，并清理订阅引用。`);
+      if (!ok) return;
+      _setCsvImportStatus(`批量删除中... count=${ids.length}`);
+      await _bulkPostJson('/api/admin/rss-sources/delete-bulk', { source_ids: ids });
+      _setCsvImportStatus(`批量删除完成: count=${ids.length}`);
+      try { window.location.reload(); } catch (e) {}
+    }
+
+    function _catalogFilterMatch(row, filter) {
+      const f = String(filter || '').trim().toUpperCase() || 'ALL';
+      const health = String(row?.dataset?.health || '').trim().toUpperCase();
+      const abnormal = String(row?.dataset?.abnormal || '').trim() === '1';
+
+      if (f === 'ALL') return true;
+      if (f === 'ABNORMAL') return abnormal;
+      return health === f;
+    }
+
+    function _catalogSearchMatch(row, q) {
+      const query = String(q || '').trim().toLowerCase();
+      if (!query) return true;
+      const hay = String(row?.dataset?.search || '').toLowerCase();
+      return hay.includes(query);
+    }
+
+    function applyCatalogFilter() {
+      const q = document.getElementById('catalog-search')?.value || '';
+      const rows = _getCatalogRows();
+      for (const tr of rows) {
+        const ok = _catalogFilterMatch(tr, _catalogFilter) && _catalogSearchMatch(tr, q);
+        tr.style.display = ok ? '' : 'none';
+      }
+
+      const c = _getCatalogContainer();
+      const btns = c ? c.querySelectorAll('button[data-filter]') : document.querySelectorAll('button[data-filter]');
+      for (const b of btns) {
+        const f = String(b?.dataset?.filter || '').trim().toUpperCase();
+        if (!f) continue;
+        if (f === String(_catalogFilter || '').trim().toUpperCase()) {
+          b.classList.add('btn-primary');
+        } else {
+          b.classList.remove('btn-primary');
+        }
+      }
+
+      updateBulkSelectionInfo();
+    }
+
+    async function deleteSource(btn) {
+      const sid = String(btn?.dataset?.id || '').trim();
+      const name = String(btn?.dataset?.name || '').trim();
+      if (!sid) return;
+      const ok = confirm(`确认删除 RSS 源？\n\nname=${name || '(unknown)'}\nsource_id=${sid}\n\n将同时删除该源 entries，并清理订阅引用。`);
+      if (!ok) return;
+
+      const originalBtnText = String(btn.textContent || '');
+      try {
+        if (!token) {
+          _setCsvImportStatus('删除失败: 缺少 admin token');
+          alert('Missing admin token. Use ?token=... to open this page or configure TREND_RADAR_ADMIN_TOKEN.');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+        _setCsvImportStatus(`Deleting: ${sid} ...`);
+
+        const resp = await fetch('/api/admin/rss-sources/delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_id: sid })
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || `Failed (${resp.status})`);
+
+        _setCsvImportStatus(`Deleted: ${sid}`);
+        try { window.location.reload(); } catch (e) {}
+      } catch (e) {
+        _setCsvImportStatus(`删除失败: ${sid}`);
+        alert(e?.message || String(e));
+        btn.textContent = originalBtnText || 'Delete';
+      } finally {
+        try { btn.disabled = false; } catch (e) {}
+      }
+    }
+
+    async function clearBackoffAndRetry(btn) {
+      const sid = String(btn?.dataset?.id || '').trim();
+      if (!sid) return;
+      const ok = confirm(`清除退避并重试抓取？\nsource_id=${sid}`);
+      if (!ok) return;
+
+      const originalBtnText = String(btn.textContent || '');
+      try {
+        if (!token) {
+          _setCsvImportStatus('操作失败: 缺少 admin token');
+          alert('Missing admin token. Use ?token=... to open this page or configure TREND_RADAR_ADMIN_TOKEN.');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '清理中...';
+        _setCsvImportStatus(`清理退避: ${sid} ...`);
+
+        const resp = await fetch('/api/admin/rss-sources/clear-backoff', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_id: sid, warmup: 0 })
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || `Failed (${resp.status})`);
+
+        _setCsvImportStatus(`已清除退避: ${sid}，开始重试抓取...`);
+        btn.textContent = '重试中...';
+
+        await warmupSource(sid);
+        btn.textContent = '已重试';
+      } catch (e) {
+        _setCsvImportStatus(`操作失败: ${sid}`);
+        alert(e?.message || String(e));
+        btn.textContent = originalBtnText || '清退避并重试';
+      } finally {
+        try { btn.disabled = false; } catch (e) {}
+      }
+    }
+
+    function setCatalogFilter(v) {
+      _catalogFilter = String(v || 'ALL');
+      applyCatalogFilter();
+    }
+
     let _csvPreviewHash = '';
     let _csvPreviewText = '';
+
+    try {
+      const search = document.getElementById('catalog-search');
+      if (search) {
+        search.addEventListener('input', () => applyCatalogFilter());
+      }
+      updateBulkSelectionInfo();
+      applyCatalogFilter();
+    } catch (e) {
+      // ignore
+    }
 
     function _setCsvImportStatus(msg) {
       const el = document.getElementById('csv-import-status');

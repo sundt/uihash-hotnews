@@ -658,14 +658,247 @@ async def api_admin_rss_sources_set_enabled(request: Request, body: Dict[str, An
     row = cur.fetchone()
     if not row:
         return JSONResponse(content={"detail": "Source not found"}, status_code=404)
-
     now = _now_ts()
     conn.execute(
         "UPDATE rss_sources SET enabled = ?, updated_at = ? WHERE id = ?",
         (int(enabled), int(now), source_id),
     )
-    conn.commit()
+    try:
+        conn.commit()
+    except Exception:
+        pass
     return JSONResponse(content={"ok": True, "source_id": source_id, "enabled": int(enabled)})
+
+
+@router.post("/api/admin/rss-sources/set-enabled-bulk")
+async def api_admin_rss_sources_set_enabled_bulk(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    source_ids = body.get("source_ids")
+    if not isinstance(source_ids, list):
+        source_ids = []
+
+    enabled_raw = body.get("enabled")
+    enabled = 1 if str(enabled_raw).strip().lower() in {"1", "true", "yes", "on"} else 0
+
+    ids: List[str] = []
+    for s in source_ids:
+        sid = str(s or "").strip()
+        if sid:
+            ids.append(sid)
+    ids = ids[:500]
+    if not ids:
+        return JSONResponse(content={"ok": True, "updated": 0})
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+
+    placeholders = ",".join(["?"] * len(ids))
+    try:
+        conn.execute(
+            f"UPDATE rss_sources SET enabled = ?, updated_at = ? WHERE id IN ({placeholders})",
+            tuple([int(enabled), int(now)] + ids),
+        )
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return JSONResponse(content={"detail": str(e)[:500]}, status_code=500)
+
+    return JSONResponse(content={"ok": True, "enabled": int(enabled), "updated": len(ids)})
+
+
+@router.post("/api/admin/rss-sources/clear-backoff")
+async def api_admin_rss_sources_clear_backoff(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    source_id = str(body.get("source_id") or "").strip()
+    warmup = bool(body.get("warmup") in {1, True, "1", "true", "yes"})
+    if not source_id:
+        return JSONResponse(content={"detail": "Missing source_id"}, status_code=400)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+    try:
+        conn.execute(
+            "UPDATE rss_sources SET fail_count = 0, backoff_until = 0, last_error_reason = '', updated_at = ? WHERE id = ?",
+            (int(now), source_id),
+        )
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return JSONResponse(content={"detail": str(e)[:500]}, status_code=500)
+
+    queued = False
+    try:
+        if warmup:
+            enqueue = getattr(request.app.state, "rss_enqueue_warmup", None)
+            if callable(enqueue):
+                fut = await enqueue(source_id, priority=0)
+                queued = fut is not None
+    except Exception:
+        queued = False
+
+    return JSONResponse(content={"ok": True, "source_id": source_id, "queued": bool(queued)})
+
+
+@router.post("/api/admin/rss-sources/clear-backoff-bulk")
+async def api_admin_rss_sources_clear_backoff_bulk(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    source_ids = body.get("source_ids")
+    if not isinstance(source_ids, list):
+        source_ids = []
+
+    ids: List[str] = []
+    for s in source_ids:
+        sid = str(s or "").strip()
+        if sid:
+            ids.append(sid)
+    ids = ids[:500]
+    if not ids:
+        return JSONResponse(content={"ok": True, "cleared": 0})
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+    placeholders = ",".join(["?"] * len(ids))
+
+    try:
+        conn.execute(
+            f"UPDATE rss_sources SET fail_count = 0, backoff_until = 0, last_error_reason = '', updated_at = ? WHERE id IN ({placeholders})",
+            tuple([int(now)] + ids),
+        )
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return JSONResponse(content={"detail": str(e)[:500]}, status_code=500)
+
+    return JSONResponse(content={"ok": True, "cleared": len(ids)})
+
+
+@router.post("/api/admin/rss-sources/delete")
+async def api_admin_rss_sources_delete(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    source_id = str(body.get("source_id") or "").strip()
+    if not source_id:
+        return JSONResponse(content={"detail": "Missing source_id"}, status_code=400)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    cur = conn.execute("SELECT id FROM rss_sources WHERE id = ?", (source_id,))
+    row = cur.fetchone()
+    if not row:
+        return JSONResponse(content={"detail": "Source not found"}, status_code=404)
+
+    try:
+        conn.execute("DELETE FROM rss_entries WHERE source_id = ?", (source_id,))
+    except Exception:
+        pass
+    try:
+        conn.execute("DELETE FROM rss_entry_ai_labels WHERE source_id = ?", (source_id,))
+    except Exception:
+        pass
+    try:
+        conn.execute("DELETE FROM rss_sources WHERE id = ?", (source_id,))
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return JSONResponse(content={"detail": str(e)[:500]}, status_code=500)
+
+    removed_subs = False
+    try:
+        uconn = get_user_db_conn(project_root=request.app.state.project_root)
+        pref = "rss-" + source_id
+        uconn.execute(
+            "DELETE FROM user_rss_subscriptions WHERE source_id = ? OR source_id = ?",
+            (source_id, pref),
+        )
+        uconn.execute(
+            "DELETE FROM user_rss_subscription_adds WHERE source_id = ? OR source_id = ?",
+            (source_id, pref),
+        )
+        uconn.commit()
+        removed_subs = True
+    except Exception:
+        removed_subs = False
+
+    return JSONResponse(content={"ok": True, "source_id": source_id, "subscriptions_removed": bool(removed_subs)})
+
+
+@router.post("/api/admin/rss-sources/delete-bulk")
+async def api_admin_rss_sources_delete_bulk(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+    if not isinstance(body, dict):
+        body = {}
+
+    source_ids = body.get("source_ids")
+    if not isinstance(source_ids, list):
+        source_ids = []
+
+    ids: List[str] = []
+    for s in source_ids:
+        sid = str(s or "").strip()
+        if sid:
+            ids.append(sid)
+    ids = ids[:200]
+    if not ids:
+        return JSONResponse(content={"ok": True, "deleted": 0})
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    placeholders = ",".join(["?"] * len(ids))
+
+    try:
+        conn.execute(f"DELETE FROM rss_entries WHERE source_id IN ({placeholders})", tuple(ids))
+    except Exception:
+        pass
+    try:
+        conn.execute(f"DELETE FROM rss_entry_ai_labels WHERE source_id IN ({placeholders})", tuple(ids))
+    except Exception:
+        pass
+
+    try:
+        conn.execute(f"DELETE FROM rss_sources WHERE id IN ({placeholders})", tuple(ids))
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return JSONResponse(content={"detail": str(e)[:500]}, status_code=500)
+
+    subs_removed = False
+    try:
+        uconn = get_user_db_conn(project_root=request.app.state.project_root)
+        pref_ids = ["rss-" + sid for sid in ids]
+        all_ids = list(ids) + pref_ids
+        p2 = ",".join(["?"] * len(all_ids))
+        uconn.execute(f"DELETE FROM user_rss_subscriptions WHERE source_id IN ({p2})", tuple(all_ids))
+        uconn.execute(f"DELETE FROM user_rss_subscription_adds WHERE source_id IN ({p2})", tuple(all_ids))
+        uconn.commit()
+        subs_removed = True
+    except Exception:
+        subs_removed = False
+
+    return JSONResponse(content={"ok": True, "deleted": len(ids), "subscriptions_removed": bool(subs_removed)})
 
 
 @router.post("/api/admin/rss-sources/bulk-disable")
@@ -1056,6 +1289,8 @@ async def admin_rss_sources_page(request: Request):
 
     conn = get_online_db_conn(project_root=request.app.state.project_root)
 
+    now = _now_ts()
+
     uconn = None
     try:
         uconn = get_user_db_conn(project_root=request.app.state.project_root)
@@ -1121,10 +1356,20 @@ async def admin_rss_sources_page(request: Request):
         latest_map = {}
 
     cur = conn.execute(
-        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
+        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, fail_count, backoff_until, last_error_reason, last_attempt_at FROM rss_sources ORDER BY updated_at DESC"
     )
     src_rows = cur.fetchall() or []
     sources = []
+    health_kpi = {
+        "OK": 0,
+        "FAIL": 0,
+        "BACKOFF": 0,
+        "NEVER_TRIED": 0,
+        "OK_EMPTY": 0,
+        "STALE": 0,
+        "DISABLED": 0,
+    }
+    abnormal_states = {"FAIL", "BACKOFF", "NEVER_TRIED", "OK_EMPTY", "STALE"}
     for r in src_rows:
         sid = str(r[0] or "").strip()
         latest_ts = int(latest_map.get(sid, 0) or 0)
@@ -1147,6 +1392,65 @@ async def admin_rss_sources_page(request: Request):
                 last_updated_str = datetime.fromtimestamp(last_updated_ts).strftime("%Y-%m-%d %H:%M")
             except Exception:
                 last_updated_str = str(last_updated_ts)
+
+        fail_count = 0
+        try:
+            fail_count = int(r[13] or 0)
+        except Exception:
+            fail_count = 0
+
+        backoff_until = 0
+        try:
+            backoff_until = int(r[14] or 0)
+        except Exception:
+            backoff_until = 0
+
+        last_error_reason = str(r[15] or "")
+
+        last_attempt_at = 0
+        try:
+            last_attempt_at = int(r[16] or 0)
+        except Exception:
+            last_attempt_at = 0
+
+        last_attempt_str = ""
+        if last_attempt_at > 0:
+            try:
+                last_attempt_str = datetime.fromtimestamp(last_attempt_at).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                last_attempt_str = str(last_attempt_at)
+
+        backoff_str = ""
+        if backoff_until > 0:
+            try:
+                backoff_str = datetime.fromtimestamp(backoff_until).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                backoff_str = str(backoff_until)
+
+        enabled = int(r[10] or 0)
+        entries_count = int(entries_map.get(sid, 0) or 0)
+        is_stale = bool(latest_ts > 0 and (now - latest_ts) > (30 * 24 * 3600))
+
+        if enabled != 1:
+            health_state = "DISABLED"
+        elif backoff_until > now:
+            health_state = "BACKOFF"
+        elif fail_count > 0:
+            health_state = "FAIL"
+        elif last_attempt_at <= 0:
+            health_state = "NEVER_TRIED"
+        elif entries_count <= 0:
+            health_state = "OK_EMPTY"
+        elif is_stale:
+            health_state = "STALE"
+        else:
+            health_state = "OK"
+
+        try:
+            health_kpi[health_state] = int(health_kpi.get(health_state, 0) or 0) + 1
+        except Exception:
+            pass
+
         sources.append(
             {
                 "id": sid,
@@ -1160,15 +1464,30 @@ async def admin_rss_sources_page(request: Request):
                 "source": str(r[8] or ""),
                 "seed_last_updated": _parse_ts_loose(r[9]),
                 "last_updated_time": last_updated_str,
-                "enabled": int(r[10] or 0),
+                "enabled": enabled,
                 "created_at": int(r[11] or 0),
                 "updated_at": int(r[12] or 0),
                 "subscribed_count": int(subs_map.get(sid, 0) or 0),
                 "added_count": int(adds_map.get(sid, 0) or 0),
-                "entries_count": int(entries_map.get(sid, 0) or 0),
+                "entries_count": entries_count,
                 "latest_entry_time": latest_str,
+                "latest_entry_ts": int(latest_ts),
+                "health_state": health_state,
+                "is_abnormal": True if health_state in abnormal_states else False,
+                "fail_count": int(fail_count),
+                "backoff_until": int(backoff_until),
+                "backoff_until_time": backoff_str,
+                "last_error_reason": last_error_reason,
+                "last_attempt_at": int(last_attempt_at),
+                "last_attempt_time": last_attempt_str,
             }
         )
+
+    abnormal_count = 0
+    try:
+        abnormal_count = int(sum(int(health_kpi.get(k, 0) or 0) for k in abnormal_states))
+    except Exception:
+        abnormal_count = 0
 
     cur = conn.execute(
         "SELECT id, url, host, title, note, status, reason, created_at FROM rss_source_requests WHERE status='pending' ORDER BY id DESC LIMIT 200"
@@ -1217,6 +1536,8 @@ async def admin_rss_sources_page(request: Request):
             "sources": sources,
             "pending": pending,
             "rejected": rejected,
+            "health_kpi": health_kpi,
+            "health_abnormal_count": int(abnormal_count),
             "token": token,
         },
     )

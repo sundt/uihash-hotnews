@@ -649,6 +649,19 @@ export const data = {
         const tabsEl = document.querySelector('.category-tabs');
         if (!tabsEl || !contentEl) return;
 
+        let _knowledgeGridHtml = '';
+        try {
+            const existingPane = document.getElementById('tab-knowledge');
+            const existingGrid = existingPane ? existingPane.querySelector('.platform-grid') : null;
+            const hasMb = !!(existingGrid && existingGrid.querySelector('.tr-morning-brief-card'));
+            const hasItems = !!(existingGrid && existingGrid.querySelector('.news-item'));
+            if (hasMb && hasItems) {
+                _knowledgeGridHtml = String(existingGrid.innerHTML || '');
+            }
+        } catch (e) {
+            _knowledgeGridHtml = '';
+        }
+
         const categories = TR.settings.applyCategoryConfigToData(data?.categories || {});
         _latestCategories = categories;
         const preferredActiveTab = (state && typeof state.activeTab === 'string') ? state.activeTab : null;
@@ -713,6 +726,44 @@ export const data = {
                 return `
                 <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
                     <div class="platform-grid" id="trExploreGrid"></div>
+                </div>`;
+            }
+
+            if (String(catId) === 'knowledge') {
+                const gridInner = _knowledgeGridHtml || `
+                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
+                        <div class="platform-header">
+                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🕒 最新 1-50</div>
+                            <div class="platform-header-actions"></div>
+                        </div>
+                        <ul class="news-list" data-mb-list="slice1">
+                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
+                        </ul>
+                    </div>
+
+                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-2" data-page-size="50" draggable="false">
+                        <div class="platform-header">
+                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">⭐ 最新 51-100</div>
+                            <div class="platform-header-actions"></div>
+                        </div>
+                        <ul class="news-list" data-mb-list="slice2">
+                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
+                        </ul>
+                    </div>
+
+                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-3" data-page-size="50" draggable="false">
+                        <div class="platform-header">
+                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🧾 最新 101-150</div>
+                            <div class="platform-header-actions"></div>
+                        </div>
+                        <ul class="news-list" data-mb-list="slice3">
+                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
+                        </ul>
+                    </div>
+                `;
+                return `
+                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
+                    <div class="platform-grid" data-mb-injected="1">${gridInner}</div>
                 </div>`;
             }
 

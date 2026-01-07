@@ -95,6 +95,10 @@ export const paging = {
 
     shouldAutofillCard(card, minVisible) {
         if (!card || card.classList.contains('platform-empty-hidden')) return false;
+        try {
+            if (card.classList.contains('tr-morning-brief-card')) return false;
+        } catch (e) {
+        }
         const visible = this.getVisibleNewsItems(card);
         const target = Number.isFinite(minVisible) ? minVisible : AUTOFILL_MIN_VISIBLE;
         if (visible.length < target) return true;
@@ -108,6 +112,10 @@ export const paging = {
 
     autofillCard(card, opts = {}) {
         if (!card) return false;
+        try {
+            if (card.classList.contains('tr-morning-brief-card')) return false;
+        } catch (e) {
+        }
         const minVisible = Number.isFinite(opts.minVisible) ? opts.minVisible : AUTOFILL_MIN_VISIBLE;
         const maxSteps = Number.isFinite(opts.maxSteps) ? opts.maxSteps : AUTOFILL_MAX_STEPS;
         const force = opts.force === true;

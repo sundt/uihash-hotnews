@@ -69,6 +69,9 @@ openspec/changes/*/
 !openspec/changes/update-rss-proxy-fetch-stability/
 !openspec/changes/update-rss-proxy-fetch-stability/**
 
+!openspec/changes/update-admin-rss-catalog-health-dashboard/
+!openspec/changes/update-admin-rss-catalog-health-dashboard/**
+
 !openspec/changes/add-one-click-full-rebuild-deploy/
 !openspec/changes/add-one-click-full-rebuild-deploy/**
 

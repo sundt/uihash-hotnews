@@ -85,6 +85,26 @@ def _rss_accept_language() -> str:
     return v or "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
 
 
+def _rss_http_max_bytes() -> int:
+    raw = ""
+    try:
+        raw = (os.environ.get("TREND_RADAR_RSS_HTTP_MAX_BYTES", "") or "").strip()
+    except Exception:
+        raw = ""
+
+    v: Optional[int] = None
+    if raw:
+        try:
+            v = int(raw)
+        except Exception:
+            v = None
+
+    if v is None or v <= 0:
+        v = 8 * 1024 * 1024
+
+    return int(max(256 * 1024, min(64 * 1024 * 1024, v)))
+
+
 def _rss_default_headers() -> Dict[str, str]:
     return {
         "User-Agent": _rss_user_agent(),
@@ -453,7 +473,7 @@ def rss_proxy_fetch_cached(url: str) -> Dict[str, Any]:
                     raise ValueError(f"Upstream error: {resp.status_code}")
 
                 content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
-                max_bytes = 2 * 1024 * 1024
+                max_bytes = _rss_http_max_bytes()
                 try:
                     resp.raw.decode_content = True
                 except Exception:
@@ -683,7 +703,7 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "") ->
                     raise ValueError(f"Upstream error: {resp.status_code}")
 
                 content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
-                max_bytes = 2 * 1024 * 1024
+                max_bytes = _rss_http_max_bytes()
                 try:
                     resp.raw.decode_content = True
                 except Exception:

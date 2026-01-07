@@ -191,14 +191,41 @@ function _isDocumentVisible() {
     }
 }
 
+function _timelineNeedsHydrate() {
+    try {
+        const pane = _getPane();
+        if (!pane) return true;
+        const lists = Array.from(pane.querySelectorAll('.news-list[data-mb-list]'));
+        if (!lists.length) return true;
+        for (const el of lists) {
+            const hasItem = !!el.querySelector('.news-item');
+            if (hasItem) return false;
+            const hasPlaceholder = !!el.querySelector('.news-placeholder');
+            if (hasPlaceholder) continue;
+            const hasEmpty = !!el.querySelector('.tr-mb-empty');
+            if (hasEmpty) continue;
+            const txt = String(el.textContent || '').trim();
+            if (txt) continue;
+        }
+        return true;
+    } catch (e) {
+        return true;
+    }
+}
+
 async function _refreshTimelineIfNeeded(opts = {}) {
     const force = opts.force === true;
     if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
     if (!_isDocumentVisible()) return false;
     if (_timelineInFlight) return false;
 
+    const needsHydrate = _timelineNeedsHydrate();
     const now = Date.now();
-    if (!force && _timelineLastRefreshAt > 0 && (now - _timelineLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
+    if (!force && !needsHydrate && _timelineLastRefreshAt > 0 && (now - _timelineLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
+        try {
+            _applyPagingToBriefCards();
+        } catch (e) {
+        }
         return false;
     }
     if (!_ensureLayout()) return false;
@@ -315,31 +342,17 @@ async function _initialLoad() {
 
     // Initial load once.
     await Promise.allSettled([
-        _refreshTimelineIfNeeded({ force: true }),
+        _refreshTimelineIfNeeded({ force: false }),
     ]);
 }
 
 function _ensurePolling() {
     if (TR.morningBrief && TR.morningBrief._pollTimer) return;
 
-    const timer = window.setInterval(() => {
-        _refreshTimelineIfNeeded({ force: false }).catch(() => {});
-
-        // Timeline mode: no polling by default.
-    }, AUTO_REFRESH_TICK_MS);
-
     TR.morningBrief = {
         ...(TR.morningBrief || {}),
-        _pollTimer: timer,
+        _pollTimer: 1,
     };
-
-    try {
-        document.addEventListener('visibilitychange', () => {
-            if (_isDocumentVisible()) {
-                _refreshTimelineIfNeeded({ force: true }).catch(() => {});
-            }
-        });
-    } catch (e) {}
 
     try {
         window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
@@ -347,7 +360,7 @@ function _ensurePolling() {
             if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
             clearTimeout(_tabSwitchDebounceTimer);
             _tabSwitchDebounceTimer = setTimeout(() => {
-                _refreshTimelineIfNeeded({ force: true }).catch(() => {});
+                _refreshTimelineIfNeeded({ force: false }).catch(() => {});
             }, 120);
         });
     } catch (e) {}

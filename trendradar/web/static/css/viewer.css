@@ -4,6 +4,10 @@
             --cross-platform-color: #f97316;
         }
 
+.news-checkbox {
+    display: none !important;
+}
+
         html {
             scrollbar-gutter: stable;
         }
@@ -585,6 +589,7 @@ body.tr-mobile-top-collapsed .header-card {
         }
 
         .news-checkbox {
+            display: none !important;
             width: 14px;
             height: 14px;
             margin-right: 6px;
