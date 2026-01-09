@@ -1,6 +1,9 @@
 services:
   trend-radar:
     image: wantcat/trendradar:${TREND_RADAR_TAG:?set TREND_RADAR_TAG}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: trend-radar
     restart: unless-stopped
 
@@ -110,6 +113,7 @@ services:
       - TREND_RADAR_MB_AI_BATCH_SIZE=${TREND_RADAR_MB_AI_BATCH_SIZE:-20}
       - TREND_RADAR_MB_AI_MAX_PER_HOUR=${TREND_RADAR_MB_AI_MAX_PER_HOUR:-200}
       - TREND_RADAR_MB_AI_CHECK_INTERVAL=${TREND_RADAR_MB_AI_CHECK_INTERVAL:-30}
+      - TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR=${TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR:-120}
       # 性能优化
       - WORKER_CONNECTIONS=${WORKER_CONNECTIONS:-1000}
       - KEEPALIVE_TIMEOUT=${KEEPALIVE_TIMEOUT:-65}

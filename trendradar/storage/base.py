@@ -22,6 +22,7 @@ class NewsItem:
     rank: int = 0                       # 排名
     url: str = ""                       # 链接 URL
     mobile_url: str = ""                # 移动端 URL
+    content: str = ""                   # 新闻正文/摘要
     crawl_time: str = ""                # 抓取时间（HH:MM 格式）
 
     # 统计信息（用于分析）
@@ -39,6 +40,7 @@ class NewsItem:
             "rank": self.rank,
             "url": self.url,
             "mobile_url": self.mobile_url,
+            "content": self.content,
             "crawl_time": self.crawl_time,
             "ranks": self.ranks,
             "first_time": self.first_time,
@@ -56,6 +58,7 @@ class NewsItem:
             rank=data.get("rank", 0),
             url=data.get("url", ""),
             mobile_url=data.get("mobile_url", ""),
+            content=data.get("content", ""),
             crawl_time=data.get("crawl_time", ""),
             ranks=data.get("ranks", []),
             first_time=data.get("first_time", ""),

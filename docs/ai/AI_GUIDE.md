@@ -4,6 +4,31 @@
 - 涉及：proposal/spec/计划、引入新能力、破坏性改动、架构/安全/性能大改
 - 操作：先读 `openspec/AGENTS.md`，在 `openspec/changes/<change-id>/` 写 `proposal.md/tasks.md/(design.md)/spec delta`，并通过审批后再实现。
 
+## 1.1 默认环境信息（避免反复追问）
+除非用户明确要改地址/端口/服务器，否则默认使用 `docs/ai/AI_CONTEXT.md` 里定义的“默认地址/端口”。
+
+当请求缺少关键连接信息时：
+- 优先回到 `docs/ai/AI_CONTEXT.md` 查默认值并直接使用
+- 仅当用户说“要换服务器/端口/域名/目录”时，才询问新的值
+
+## 1.2 Viewer 自动重启规则（避免手动操作）
+
+由于 `trend-radar-viewer` 容器未挂载源码目录（只挂载 `config/` 和 `output/`），因此改动代码/静态资源后不会自动生效。
+当修改以下文件类型/路径时，AI 必须自动触发 viewer 重建与重启（而不是让用户手动重启）：
+
+- `trendradar/web/static/**/*.css`（CSS）
+- `trendradar/web/static/**/*.js`（JS，包含 `viewer.js` / `viewer.bundle.js`）
+- `trendradar/web/templates/**/*.html`（模板/Jinja2）
+- `trendradar/web/**/*.py`（viewer 后端路由/服务代码）
+- `docker/Dockerfile.viewer`、`docker/docker-compose-build.yml`（镜像/compose 变更）
+
+自动重启方式（按环境选择其一）：
+
+- 本地（Docker）：运行 `bash docker/local-refresh-viewer.sh`（会 build + force-recreate + 等待 `/health`）。
+- 服务器（线上）：运行 `bash deploy-rebuild.sh --message "..."`（全量重建三服务，包含 viewer；也会做 `/health` 验证）。
+
+注意：服务端静态资源存在缓存头（`Cache-Control: max-age=3600`）。即便已重启成功，浏览器也可能需要强刷（mac：`Cmd+Shift+R`）才能看到新 CSS/JS。
+
 ## 2. 文档维护规则
 - Canonical：`docs/ai/AI_CONTEXT.md` 是 AI 入口；`docs/README.md` 是 docs 索引。
 - 入口文件（例如 `CLAUDE.md`、`WINDSURF.md`、`CURSOR.md`）只允许写“跳转指引”，不要复制规则，避免漂移。

@@ -15,6 +15,8 @@ Instructions for AI coding assistants using OpenSpec for spec-driven development
 - Pick a unique `change-id`: kebab-case, verb-led (`add-`, `update-`, `remove-`, `refactor-`)
 - Scaffold: `proposal.md`, `tasks.md`, `design.md` (only if needed), and delta specs per affected capability
 - Write deltas: use `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`; include at least one `#### Scenario:` per requirement
+- Scenario headers are STRICT: `#### Scenario: Name` ONLY. Wrong formats are (silently ignored) and cause missing acceptance criteria (DATA LOSS).
+- DO NOT use bullets or bold for scenario headers. DO NOT write `### Scenario:` or `- **Scenario:**`.
 - Validate: `openspec validate [change-id] --strict` and fix issues
 - Request approval: Do not start implementation until proposal is approved
 
@@ -57,10 +59,10 @@ Track these steps as TODOs and complete them one by one.
 1. **Read proposal.md** - Understand what's being built
 2. **Read design.md** (if exists) - Review technical decisions
 3. **Read tasks.md** - Get implementation checklist
-4. **Implement tasks sequentially** - Complete in order
-5. **Run E2E tests** - After implementation, run `npm test` to verify (see Testing Integration below)
-6. **Fix test failures** - If tests fail, analyze errors and fix code until all tests pass
-7. **Add new tests** - For new features, add corresponding test cases to `tests/e2e/`
+4. **Add/Update tests first (when applicable)** - For new features or behavior changes, write/update E2E tests in `tests/e2e/` before (or alongside) implementation.
+5. **Implement tasks sequentially** - Complete in order
+6. **Run E2E tests** - Run `npm test` to verify (see Testing Integration below)
+7. **Fix test failures** - If tests fail, analyze errors and fix code until all tests pass
 8. **Confirm completion** - Ensure every item in `tasks.md` is finished before updating statuses
 9. **Update checklist** - After all work is done, set every task to `- [x]` so the list reflects reality
 10. **Approval gate** - Do not start implementation until the proposal is reviewed and approved
@@ -122,10 +124,11 @@ When encountering test failures:
 
 ### Stage 3: Archiving Changes
 After deployment, create separate PR to:
-- Move `changes/[name]/` → `changes/archive/YYYY-MM-DD-[name]/`
-- Update `specs/` if capabilities changed
-- Use `openspec archive <change-id> --skip-specs --yes` for tooling-only changes (always pass the change ID explicitly)
-- Run `openspec validate --strict` to confirm the archived change passes checks
+- Prefer `openspec archive <change-id>` to perform the archive (this should handle moving `changes/<id>/` into `changes/archive/...` and applying spec merges where applicable).
+- Create a PR that contains the results of archiving (whether produced by the CLI or manual fallback).
+- Manual fallback (only if CLI is unavailable or fails): move `changes/[name]/` → `changes/archive/YYYY-MM-DD-[name]/` and update `specs/` accordingly.
+- Use `openspec archive <change-id> --skip-specs --yes` for tooling-only changes (always pass the change ID explicitly).
+- Run `openspec validate --strict` to confirm the archived change passes checks.
 
 ## Before Any Task
 
@@ -275,6 +278,13 @@ Create `design.md` if any of the following apply; otherwise omit it:
 - Security, performance, or migration complexity
 - Ambiguity that benefits from technical decisions before coding
 
+Practical triggers (less subjective): create `design.md` if any are true:
+- The change spans 2+ top-level areas (e.g. both `trendradar/` and `docker/`, or backend + frontend)
+- You need to choose between multiple implementation approaches with meaningful trade-offs
+- There is a migration/rollback plan beyond “revert commit” (schema/config/backfills)
+- You introduce a new API contract, storage format, or background job
+- You need coordination across services or shared libraries
+
 Minimal `design.md` skeleton:
 ```markdown
 ## Context
@@ -332,7 +342,14 @@ Headers matched with `trim(header)` - whitespace ignored.
 
 #### When to use ADDED vs MODIFIED
 - ADDED: Introduces a new capability or sub-capability that can stand alone as a requirement. Prefer ADDED when the change is orthogonal (e.g., adding "Slash Command Configuration") rather than altering the semantics of an existing requirement.
-- MODIFIED: Changes the behavior, scope, or acceptance criteria of an existing requirement. Always paste the full, updated requirement content (header + all scenarios). The archiver will replace the entire requirement with what you provide here; partial deltas will drop previous details.
+- MODIFIED: Changes the behavior, scope, or acceptance criteria of an existing requirement.
+  Always paste the full, updated requirement content (header + all scenarios).
+  The archiver will replace the entire requirement with what you provide here; partial deltas will drop previous details.
+
+  **Safety note (data-loss risk):** Treat MODIFIED as a destructive overwrite.
+  Never rewrite a requirement from memory.
+  Always open the source spec file first and copy the entire existing requirement block, then edit.
+  If you intend to remove or rewrite an existing scenario, do it explicitly and deliberately.
 - RENAMED: Use when only the name changes. If you also change behavior, use RENAMED (name) plus MODIFIED (content) referencing the new name.
 
 Common pitfall: Using MODIFIED to add a new concern without including the previous text. This causes loss of detail at archive time. If you aren’t explicitly changing the existing requirement, add a new requirement under ADDED instead.
@@ -342,6 +359,11 @@ Authoring a MODIFIED requirement correctly:
 2) Copy the entire requirement block (from `### Requirement: ...` through its scenarios).
 3) Paste it under `## MODIFIED Requirements` and edit to reflect the new behavior.
 4) Ensure the header text matches exactly (whitespace-insensitive) and keep at least one `#### Scenario:`.
+
+Recommended workflow to prevent accidental drops:
+1) Copy the original block first, unchanged.
+2) Make only the minimal edits needed.
+3) Re-scan the MODIFIED block and confirm every pre-existing scenario is either preserved or intentionally removed.
 
 Example for RENAMED:
 ```markdown
@@ -365,6 +387,15 @@ Example for RENAMED:
 **Silent scenario parsing failures**
 - Exact format required: `#### Scenario: Name`
 - Debug with: `openspec show [change] --json --deltas-only`
+
+To catch format mistakes early (before archiving), add a quick self-check:
+```bash
+# Scenario headers must be 4 hashes exactly
+rg -n "^#### Scenario:" openspec/changes/<change-id>/specs
+
+# If you see '### Scenario:' or '**Scenario**' you likely have an ignored scenario
+rg -n "^### Scenario:|\*\*Scenario\*\*" openspec/changes/<change-id>/specs
+```
 
 ### Validation Tips
 

@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import requests
 
 from trendradar.web.db_online import get_online_db_conn
+from trendradar.providers.runner import run_provider_ingestion_once, build_default_registry, ProviderIngestionConfig
 from trendradar.web.rss_proxy import rss_proxy_fetch_warmup
 
 
@@ -41,6 +42,16 @@ _mb_ai_global_sem: Optional[asyncio.Semaphore] = None
 _mb_ai_budget_lock = Lock()
 _mb_ai_budget_window_start: float = 0.0
 _mb_ai_budget_count: int = 0
+
+
+# RSS Source AI Classification scheduled task
+_rss_source_ai_task: Optional[asyncio.Task] = None
+_rss_source_ai_running: bool = False
+_rss_source_ai_last_run_date: str = ""
+
+# Custom Source Ingestion (Unified)
+_custom_ingest_task: Optional[asyncio.Task] = None
+_custom_ingest_running: bool = False
 
 
 _MB_AI_PROMPT_VERSION = "mb_llm_filter_v4_hybrid"  # Chinese-first for DeepSeek/Qwen, English fields for compatibility
@@ -639,6 +650,298 @@ async def mb_ai_test_classification(test_items: List[Dict[str, str]], force_mode
         return {"ok": False, "error": str(e)[:500], "model": model}
 
 
+# ========== RSS Source AI Classification (Daily Update) ==========
+
+
+def _rss_source_ai_enabled() -> bool:
+    """Check if RSS source AI classification is enabled"""
+    try:
+        enabled = (os.environ.get("TREND_RADAR_RSS_SOURCE_AI_ENABLED") or "0").strip().lower() in {"1", "true", "yes"}
+        if not enabled:
+            return False
+        key = (os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+        return bool(key)
+    except Exception:
+        return False
+
+
+def _rss_source_ai_prompt() -> str:
+    """Prompt for RSS source classification"""
+    return (
+        "任务：分类RSS订阅源的元信息。输入N条，必须输出N条JSON。\n\n"
+        "分类维度：\n"
+        "• category: 内容分类（如：AI_MODEL, DEV_INFRA, HARDWARE_PRO, TECH_NEWS, FINANCE, BUSINESS, OTHER等）\n"
+        "• country: 国家/地区（如：中国, 美国, 日本, 英国等，使用中文）\n"
+        "• language: 主要语言（如：中文, 英文, 日文等，使用中文）\n\n"
+        "输出格式（严格JSON数组）：[{\"id\":\"...\",\"category\":\"...\",\"country\":\"...\",\"language\":\"...\",\"confidence\":0.0-1.0}]\n"
+        "⚠️ 关键：输出数组长度必须与输入完全一致。\n\n"
+        "示例：\n"
+        "{\"domain\":\"techcrunch.com\",\"name\":\"TechCrunch\"} → {\"category\":\"TECH_NEWS\",\"country\":\"美国\",\"language\":\"英文\",\"confidence\":0.9}\n"
+        "{\"domain\":\"36kr.com\",\"name\":\"36氪\"} → {\"category\":\"TECH_NEWS\",\"country\":\"中国\",\"language\":\"中文\",\"confidence\":0.95}\n"
+    )
+
+
+async def _rss_source_ai_classify_call(items: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    """Call AI to classify RSS sources"""
+    api_key = (os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("Missing DASHSCOPE_API_KEY")
+
+    # Fallback to MB AI model if RSS specific model is not set
+    model = (os.environ.get("TREND_RADAR_RSS_SOURCE_AI_MODEL") or os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus").strip()
+    endpoint = (os.environ.get("TREND_RADAR_MB_AI_ENDPOINT") or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": _rss_source_ai_prompt()},
+            {"role": "user", "content": json.dumps(items, ensure_ascii=False)},
+        ],
+        "temperature": 0,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    timeout_s = 60
+    proxies = {"http": None, "https": None}
+    
+    if os.environ.get("TREND_RADAR_MB_AI_USE_PROXY", "").strip().lower() in {"1", "true", "yes"}:
+        proxies = None
+
+    resp = await asyncio.to_thread(
+        requests.post, endpoint, headers=headers, json=payload, timeout=timeout_s, proxies=proxies
+    )
+    
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise RuntimeError(f"ai_http_{resp.status_code}: {resp.text[:500]}")
+    
+    data = resp.json() if resp.content else {}
+    try:
+        content = (data.get("choices") or [])[0].get("message", {}).get("content", "")
+    except Exception:
+        content = ""
+    
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("ai_empty_content")
+
+    parsed = json.loads(content)
+    if not isinstance(parsed, list):
+        raise RuntimeError("ai_invalid_json_not_array")
+    
+    min_expected = int(len(items) * 0.8)
+    if len(parsed) < min_expected:
+        raise RuntimeError(f"ai_invalid_len expected>={min_expected} got={len(parsed)}")
+    
+    return parsed
+
+
+def _rss_source_ai_select_unclassified(conn, limit: int) -> List[Dict[str, Any]]:
+    """Select RSS sources that need AI classification"""
+    lim = max(1, min(100, int(limit or 20)))
+    
+    # Select sources where category, country, or language is empty
+    cur = conn.execute(
+        """
+        SELECT id, name, url, host, category, country, language, feed_type
+        FROM rss_sources
+        WHERE enabled = 1
+          AND (
+            category IS NULL OR category = ''
+            OR country IS NULL OR country = ''
+            OR language IS NULL OR language = ''
+          )
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (lim,),
+    )
+    rows = cur.fetchall() or []
+    
+    sources: List[Dict[str, Any]] = []
+    for r in rows:
+        sources.append({
+            "id": str(r[0] or ""),
+            "name": str(r[1] or ""),
+            "url": str(r[2] or ""),
+            "host": str(r[3] or ""),
+            "category": str(r[4] or ""),
+            "country": str(r[5] or ""),
+            "language": str(r[6] or ""),
+            "feed_type": str(r[7] or ""),
+        })
+    
+    return sources
+
+
+async def _rss_source_ai_classify_loop() -> None:
+    """Daily scheduled task to classify RSS sources using AI"""
+    global _rss_source_ai_running, _rss_source_ai_last_run_date
+    
+    if not _rss_source_ai_enabled():
+        return
+    
+    logger.info("rss_source_ai_classify.start")
+    
+    while _rss_source_ai_running:
+        try:
+            if not _rss_source_ai_enabled():
+                await asyncio.sleep(60)
+                continue
+            
+            # Check if we should run today
+            now = datetime.now()
+            today = now.strftime("%Y-%m-%d")
+            
+            # Run once per day at 02:00-04:00
+            current_hour = now.hour
+            should_run = (2 <= current_hour < 4) and (_rss_source_ai_last_run_date != today)
+            
+            if not should_run:
+                # Check every 10 minutes
+                await asyncio.sleep(600)
+                continue
+            
+            # Mark as run for today
+            _rss_source_ai_last_run_date = today
+            
+            logger.info("rss_source_ai_classify.daily_run date=%s", today)
+            
+            batch_size = 20
+            try:
+                batch_size = int(os.environ.get("TREND_RADAR_RSS_SOURCE_AI_BATCH_SIZE", "20"))
+            except Exception:
+                batch_size = 20
+            batch_size = max(1, min(50, batch_size))
+            
+            conn = _get_online_db_conn()
+            sources = _rss_source_ai_select_unclassified(conn, batch_size)
+            
+            if not sources:
+                logger.info("rss_source_ai_classify.no_sources_to_classify")
+                await asyncio.sleep(600)
+                continue
+            
+            # Prepare items for AI
+            items_for_ai = []
+            for src in sources:
+                items_for_ai.append({
+                    "id": src["id"],
+                    "domain": src["host"],
+                    "name": src["name"],
+                    "url": src["url"],
+                })
+            
+            # Call AI
+            try:
+                results = await _rss_source_ai_classify_call(items_for_ai)
+            except Exception as e:
+                logger.warning("rss_source_ai_classify.ai_call_failed error=%s", str(e)[:500])
+                await asyncio.sleep(600)
+                continue
+            
+            # Update database
+            updated_count = 0
+            now_ts = _now_ts()
+            
+            for src, result in zip(sources, results):
+                if not isinstance(result, dict):
+                    continue
+                
+                source_id = src["id"]
+                category = str(result.get("category") or "").strip()
+                country = str(result.get("country") or "").strip()
+                language = str(result.get("language") or "").strip()
+                
+                # Only update if we got valid data
+                updates = []
+                values = []
+                
+                if category and not src["category"]:
+                    updates.append("category = ?")
+                    values.append(category)
+                
+                if country and not src["country"]:
+                    updates.append("country = ?")
+                    values.append(country)
+                
+                if language and not src["language"]:
+                    updates.append("language = ?")
+                    values.append(language)
+                
+                if updates:
+                    updates.append("updated_at = ?")
+                    values.append(now_ts)
+                    values.append(source_id)
+                    
+                    sql = f"UPDATE rss_sources SET {', '.join(updates)} WHERE id = ?"
+                    try:
+                        conn.execute(sql, tuple(values))
+                        updated_count += 1
+                    except Exception as e:
+                        logger.warning("rss_source_ai_classify.update_failed source_id=%s error=%s", source_id, str(e))
+            
+            try:
+                conn.commit()
+                logger.info("rss_source_ai_classify.batch_complete attempted=%s updated=%s", len(sources), updated_count)
+            except Exception as e:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                logger.warning("rss_source_ai_classify.commit_failed error=%s", str(e))
+            
+            # Wait 1 minute before next batch (if there are more sources to process)
+            await asyncio.sleep(60)
+            
+        except Exception as e:
+            logger.error("rss_source_ai_classify.error: %s", str(e))
+            await asyncio.sleep(600)
+    
+    logger.info("rss_source_ai_classify.stop")
+
+
+async def _custom_ingest_loop() -> None:
+    """Loop for custom source ingestion."""
+    global _custom_ingest_running
+    logger.info("custom_ingest.start")
+    
+    # We might want a default registry
+    registry = build_default_registry()
+    
+    while _custom_ingest_running:
+        try:
+            # We run every X seconds (e.g. 5 minutes for now, or respect cron later)
+            # For simplicity in V1, we just run the ingestion pass which checks all sources.
+            # Ideally `run_provider_ingestion_once` should filter by due time if we want advanced scheduling,
+            # but currently it runs all enabled platforms.
+            # To avoid overuse, we sleep a good amount.
+            
+            interval = 600 # 10 minutes default
+            
+            # Since run_provider_ingestion_once logic is synchronous and designed for CLI/Cron usage,
+            # we should enable it to be called here.
+            # It loads from DB now (we modified it).
+            
+            # We need to pass the project root.
+            if _project_root:
+                # await asyncio.to_thread(
+                #     run_provider_ingestion_once,
+                #     registry=registry,
+                #     project_root=_project_root,
+                #     config_path=None # default
+                # )
+                pass
+            
+            await asyncio.sleep(interval)
+        except Exception as e:
+            logger.error("custom_ingest_loop error: %s", str(e))
+            await asyncio.sleep(60)
+
+    logger.info("custom_ingest.stop")
+
+
 def _rss_entry_canonical_url(raw_url: str) -> str:
     u = (raw_url or "").strip()
     if not u:
@@ -885,10 +1188,11 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
     now = _now_ts()
     conn = _get_online_db_conn()
     cur = conn.execute(
-        "SELECT id, url, enabled, cadence, etag, last_modified, fail_count, backoff_until FROM rss_sources WHERE id = ?",
+        "SELECT id, url, enabled, cadence, etag, last_modified, fail_count, backoff_until, scrape_rules FROM rss_sources WHERE id = ?",
         (sid,),
     )
     row = cur.fetchone()
+
     if not row:
         return {"ok": False, "source_id": sid, "error": "Source not found"}
     enabled = int(row[2] or 0)
@@ -919,9 +1223,10 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
 
     etag = str(row[4] or "")
     last_modified = str(row[5] or "")
+    scrape_rules = str(row[8] or "")
     try:
-        logger.info("rss_warmup.fetch start source_id=%s url=%s", sid, url)
-        fetched = await asyncio.to_thread(rss_proxy_fetch_warmup, url, etag, last_modified)
+        logger.info("rss_warmup.fetch start source_id=%s url=%s scrape=%s", sid, url, bool(scrape_rules))
+        fetched = await asyncio.to_thread(rss_proxy_fetch_warmup, url, etag, last_modified, scrape_rules)
 
         try:
             data = fetched.get("data") if isinstance(fetched, dict) else None
@@ -1110,6 +1415,8 @@ async def start(app, project_root) -> None:
     global _project_root
     global _rss_warmup_queue, _rss_warmup_worker_task, _rss_warmup_producer_task, _rss_warmup_running, _rss_warmup_global_sem
     global _mb_ai_task, _mb_ai_running, _mb_ai_global_sem
+    global _rss_source_ai_task, _rss_source_ai_running
+    global _custom_ingest_running, _custom_ingest_task
 
     _project_root = project_root
 
@@ -1144,14 +1451,31 @@ async def start(app, project_root) -> None:
         _mb_ai_running = True
         if _mb_ai_task is None or _mb_ai_task.done():
             _mb_ai_task = asyncio.create_task(_mb_ai_loop())
+    
+    # RSS Source AI Classification (Daily)
+    if _rss_source_ai_enabled():
+        _rss_source_ai_running = True
+        if _rss_source_ai_task is None or _rss_source_ai_task.done():
+            _rss_source_ai_task = asyncio.create_task(_rss_source_ai_classify_loop())
+            logger.info("rss_source_ai_classify.enabled")
 
+    # Custom Ingestion Loop
+    _custom_ingest_running = True
+    if _custom_ingest_task is None or _custom_ingest_task.done():
+        _custom_ingest_task = asyncio.create_task(_custom_ingest_loop())
+        logger.info("custom_ingest.enabled")
 
 
 async def stop() -> None:
     global _rss_warmup_running
     global _mb_ai_running
+    global _rss_source_ai_running
+    global _custom_ingest_running
 
     _rss_warmup_running = False
+    _mb_ai_running = False
+    _rss_source_ai_running = False
+    _custom_ingest_running = False
 
     logger.info("rss_warmup.stop")
 
@@ -1173,3 +1497,17 @@ async def stop() -> None:
             _mb_ai_task.cancel()
     except Exception:
         pass
+    
+    _rss_source_ai_running = False
+    try:
+        if _rss_source_ai_task is not None:
+            _rss_source_ai_task.cancel()
+    except Exception:
+        pass
+
+    try:
+        if _custom_ingest_task is not None:
+            _custom_ingest_task.cancel()
+    except Exception:
+        pass
+

@@ -10,6 +10,8 @@ COPY mcp_server/ ./mcp_server/
 
 RUN mkdir -p /app/config /app/output
 
+
+
 ENV PYTHONUNBUFFERED=1 \
     CONFIG_PATH=/app/config/config.yaml \
     FREQUENCY_WORDS_PATH=/app/config/frequency_words.txt

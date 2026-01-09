@@ -206,6 +206,7 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
         payload = json.loads(text)
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             feed_title = str(payload.get("title") or "")
+            feed_lang = str(payload.get("language") or "")
             entries = []
             for it in payload.get("items") or []:
                 if not isinstance(it, dict):
@@ -214,7 +215,7 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
                 title = it.get("title") or url
                 published = it.get("date_published") or it.get("date_modified")
                 entries.append({"title": title, "link": url, "published": published})
-            return {"format": "json", "feed": {"title": feed_title}, "entries": entries}
+            return {"format": "json", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
         return {"format": "json", "payload": payload}
 
     import xml.etree.ElementTree as ET
@@ -232,10 +233,16 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
             return {"format": "xml", "feed": {"title": ""}, "entries": []}
 
         feed_title = ""
+        feed_lang = ""
         for child in channel:
             if _strip_xml_tag(child.tag).lower() == "title":
                 feed_title = (child.text or "").strip()
                 break
+        for child in channel:
+            if _strip_xml_tag(child.tag).lower() in {"language", "dc:language"}:
+                feed_lang = (child.text or "").strip()
+                if feed_lang:
+                    break
 
         entries = []
         for item in channel:
@@ -255,14 +262,25 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
             if not title:
                 title = link
             entries.append({"title": title, "link": link, "published": pub})
-        return {"format": "rss", "feed": {"title": feed_title}, "entries": entries}
+        return {"format": "rss", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
 
     if root_tag == "feed":
         feed_title = ""
+        feed_lang = ""
+        try:
+            feed_lang = (root.attrib.get("{http://www.w3.org/XML/1998/namespace}lang") or root.attrib.get("lang") or "").strip()
+        except Exception:
+            feed_lang = ""
         for child in root:
             if _strip_xml_tag(child.tag).lower() == "title":
                 feed_title = (child.text or "").strip()
                 break
+        for child in root:
+            if _strip_xml_tag(child.tag).lower() == "language":
+                v = (child.text or "").strip()
+                if v:
+                    feed_lang = v
+                    break
 
         entries = []
         for ent in root:
@@ -285,9 +303,72 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
             if not title:
                 title = link
             entries.append({"title": title, "link": link, "published": pub})
-        return {"format": "atom", "feed": {"title": feed_title}, "entries": entries}
+        return {"format": "atom", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
 
     return {"format": "xml", "feed": {"title": ""}, "entries": []}
+
+
+def parse_html_content(body: bytes, rules: str) -> Dict[str, Any]:
+    """Parse HTML content using CSS selectors defined in rules JSON."""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        raise ValueError("bs4 not installed")
+
+    rule_dict = {}
+    try:
+        rule_dict = json.loads(rules)
+    except Exception:
+        pass
+    
+    if not isinstance(rule_dict, dict):
+        raise ValueError("Invalid scrape_rules json")
+
+    item_sel = rule_dict.get("item")
+    title_sel = rule_dict.get("title")
+    link_sel = rule_dict.get("link")
+    date_sel = rule_dict.get("date")  # Optional
+
+    if not item_sel or not title_sel or not link_sel:
+        raise ValueError("Missing required selectors: item, title, link")
+
+    text = body.decode("utf-8", errors="replace")
+    soup = BeautifulSoup(text, "html.parser")
+    
+    entries = []
+    items = soup.select(item_sel)
+    for it in items:
+        try:
+            # Title
+            t_el = it.select_one(title_sel)
+            if not t_el:
+                continue
+            title = t_el.get_text(strip=True)
+            
+            # Link
+            l_el = it.select_one(link_sel)
+            if not l_el:
+                continue
+            link = l_el.get("href")
+            if not link:
+                continue
+            
+            # Date (Optional)
+            pub = ""
+            if date_sel:
+                d_el = it.select_one(date_sel)
+                if d_el:
+                    pub = d_el.get_text(strip=True) or d_el.get("datetime") or ""
+
+            entries.append({"title": title, "link": link, "published": pub})
+        except Exception:
+            continue
+
+    return {
+        "format": "html",
+        "feed": {"title": "Scraped Feed", "language": ""},
+        "entries": entries
+    }
 
 
 def _extract_first_n_entries_from_truncated_xml(body: bytes, limit: int) -> Optional[bytes]:
@@ -612,7 +693,7 @@ def rss_proxy_cache_get_any_ttl(url: str, ttl: int) -> Optional[Dict[str, Any]]:
     return cached if isinstance(cached, dict) else None
 
 
-def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "") -> Dict[str, Any]:
+def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", scrape_rules: str = "") -> Dict[str, Any]:
     cache = get_cache()
     key = f"rssproxy:{_md5_hex(url)}"
 
@@ -717,6 +798,22 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "") ->
                     head = stripped[:512].lower()
                     is_html = (b"<html" in head) or (b"<!doctype html" in head)
                     if is_html:
+                        if scrape_rules:
+                            try:
+                                parsed = parse_html_content(data, scrape_rules)
+                                result = {
+                                    "url": url,
+                                    "final_url": current_url,
+                                    "content_type": content_type,
+                                    "data": parsed,
+                                    "etag": (resp.headers.get("ETag") or "").strip(),
+                                    "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                                }
+                                cache.set(key, result)
+                                return result
+                            except Exception as e:
+                                pass
+                        
                         snippet = stripped[:240].decode("utf-8", errors="replace")
                         raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 

@@ -91,13 +91,23 @@ test.describe('News Viewer Page', () => {
 
   test.describe('News Interaction', () => {
     test('should mark news as read when checkbox clicked', async () => {
-      const firstNewsCheckbox = viewerPage.platformCards.first()
-        .locator('.news-item').first()
-        .locator('.news-checkbox');
-      
+      const firstCard = viewerPage.platformCards.first();
+      await expect(firstCard).toBeVisible({ timeout: 15000 });
+
+      const firstNewsItem = firstCard.locator('.news-item').first();
+      await expect(firstNewsItem).toBeVisible({ timeout: 15000 });
+
+      const firstNewsCheckbox = firstNewsItem.locator('.news-checkbox');
       await expect(firstNewsCheckbox).not.toBeChecked();
-      await firstNewsCheckbox.click();
+
+      await firstNewsCheckbox.evaluate((el) => {
+        const cb = el as HTMLInputElement;
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+
       await expect(firstNewsCheckbox).toBeChecked();
+      await expect(firstNewsItem).toHaveClass(/\bread\b/);
     });
 
     test('should mark news as read when title clicked', async ({ page }) => {

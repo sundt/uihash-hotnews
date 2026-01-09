@@ -5,14 +5,17 @@ import csv
 import io
 import json
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 
 from trendradar.web.db_online import get_online_db_conn
+from trendradar.web.rss_proxy import rss_proxy_fetch_cached
 from trendradar.web.user_db import added_counts, get_user_db_conn, subscriber_counts
 
 
@@ -153,6 +156,124 @@ def _extract_host(url: str) -> str:
         return "-"
 
 
+def _ts_to_str(ts: int) -> str:
+    t = 0
+    try:
+        t = int(ts or 0)
+    except Exception:
+        t = 0
+    if t <= 0:
+        return ""
+    try:
+        return datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(t)
+
+
+def _parse_http_date_to_ts(s: str) -> int:
+    v = (s or "").strip()
+    if not v:
+        return 0
+    try:
+        dt = parsedate_to_datetime(v)
+        return int(dt.timestamp())
+    except Exception:
+        return 0
+
+
+def _extract_entry_ts(v: Any) -> int:
+    ts = _parse_ts_loose(v)
+    if ts > 0:
+        return ts
+    try:
+        return _parse_http_date_to_ts(str(v or ""))
+    except Exception:
+        return 0
+
+
+def _best_entries_ts(entries: Any) -> int:
+    if not isinstance(entries, list):
+        return 0
+    best = 0
+    for it in entries:
+        if not isinstance(it, dict):
+            continue
+        ts = _extract_entry_ts(it.get("published"))
+        if ts > best:
+            best = ts
+    return int(best)
+
+
+def _db_get_source_by_url(conn, url: str) -> Optional[Dict[str, Any]]:
+    try:
+        cur = conn.execute(
+            "SELECT name, host, category, feed_type, country, language, source, seed_last_updated, added_at FROM rss_sources WHERE url = ? LIMIT 1",
+            (str(url or "").strip(),),
+        )
+        row = cur.fetchone()
+    except Exception:
+        row = None
+    if not row:
+        return None
+    try:
+        return {
+            "name": str(row[0] or ""),
+            "host": str(row[1] or ""),
+            "category": str(row[2] or ""),
+            "feed_type": str(row[3] or ""),
+            "country": str(row[4] or ""),
+            "language": str(row[5] or ""),
+            "source": str(row[6] or ""),
+            "seed_last_updated": str(row[7] or ""),
+            "added_at": int(row[8] or 0),
+        }
+    except Exception:
+        return None
+
+
+def _merge_if_empty(dst: Dict[str, Any], src: Dict[str, Any], key: str) -> None:
+    if key not in dst or dst.get(key) is None:
+        dst[key] = src.get(key)
+        return
+    v = dst.get(key)
+    if isinstance(v, str) and not v.strip():
+        dst[key] = src.get(key)
+        return
+    if isinstance(v, (int, float)) and int(v) == 0:
+        dst[key] = src.get(key)
+        return
+
+
+def _autofill_item_from_feed(url: str) -> Dict[str, Any]:
+    result = rss_proxy_fetch_cached(url)
+    data = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(data, dict):
+        return {}
+    feed = data.get("feed") if isinstance(data.get("feed"), dict) else {}
+    title = str(feed.get("title") or "").strip()
+    lang = str(feed.get("language") or "").strip()
+    fmt = str(data.get("format") or "").strip()
+    entries = data.get("entries")
+
+    best_ts = _best_entries_ts(entries)
+    lm_ts = _parse_http_date_to_ts(str(result.get("last_modified") or ""))
+    seed_ts = best_ts or lm_ts
+    seed_str = _ts_to_str(seed_ts)
+
+    return {
+        "name": title,
+        "feed_type": fmt,
+        "seed_last_updated": seed_str,
+        "host": _extract_host(url),
+        "language": lang,
+        "entry_titles": [
+            str((it.get("title") if isinstance(it, dict) else "") or "").strip()[:200]
+            for it in (entries if isinstance(entries, list) else [])
+            if str((it.get("title") if isinstance(it, dict) else "") or "").strip()
+        ][:10],
+    }
+
+
 def _detect_csv_format(csv_text: str) -> str:
     first = ""
     for line in (csv_text or "").splitlines():
@@ -161,6 +282,8 @@ def _detect_csv_format(csv_text: str) -> str:
             break
     if not first:
         return "unknown"
+    if "," not in first and (first.startswith("http://") or first.startswith("https://")):
+        return "url_only"
     if "订阅地址" in first or "标题" in first:
         return "headered_zh"
     return "headerless_fixed"
@@ -170,6 +293,31 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
     fmt = _detect_csv_format(csv_text)
     items: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
+
+    if fmt == "url_only":
+        for i, line in enumerate((csv_text or "").splitlines(), start=1):
+            raw = str(line or "").strip()
+            if not raw:
+                continue
+            try:
+                url = _validate_and_normalize_url(raw)
+                items.append(
+                    {
+                        "line_no": i,
+                        "name": "",
+                        "url": url,
+                        "seed_last_updated": "",
+                        "category": "",
+                        "feed_type": "",
+                        "country": "",
+                        "language": "",
+                        "source": "",
+                        "added_at": "",
+                    }
+                )
+            except Exception as e:
+                invalid.append({"line_no": i, "error": str(e)})
+        return fmt, items, invalid
 
     if fmt == "headered_zh":
         f = io.StringIO(csv_text or "")
@@ -256,7 +404,8 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
 
 
 def _preview_hash(csv_text: str) -> str:
-    return _md5_hex((csv_text or "").strip())
+    text = (csv_text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    return _md5_hex(text)
 
 
 def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> str:
@@ -1186,14 +1335,83 @@ async def api_admin_rss_sources_import_csv_preview(request: Request):
             inserted += 1
             it["action"] = "insert"
 
+    autofilled = 0
+    fetched = 0
+    from_db = 0
+    fetch_errors: List[Dict[str, Any]] = []
+
+    if fmt == "url_only" and unique_items:
+        sem = asyncio.Semaphore(6)
+
+        async def _fill_one(it: Dict[str, Any]) -> None:
+            nonlocal autofilled, fetched, from_db
+            url = str(it.get("url") or "").strip()
+            if not url:
+                return
+            db_row = _db_get_source_by_url(conn, url)
+            if isinstance(db_row, dict):
+                for k in ("name", "host", "category", "feed_type", "country", "language", "source", "seed_last_updated"):
+                    _merge_if_empty(it, db_row, k)
+                if int(db_row.get("added_at") or 0) > 0:
+                    _merge_if_empty(it, {"added_at": _ts_to_str(int(db_row.get("added_at") or 0))}, "added_at")
+                from_db += 1
+
+            if not str(it.get("name") or "").strip() or not str(it.get("seed_last_updated") or "").strip():
+                async with sem:
+                    try:
+                        meta = await asyncio.to_thread(_autofill_item_from_feed, url)
+                        if isinstance(meta, dict):
+                            for k in ("name", "feed_type", "seed_last_updated", "host"):
+                                _merge_if_empty(it, meta, k)
+                            if isinstance(meta.get("language"), str):
+                                _merge_if_empty(it, meta, "language")
+                            if isinstance(meta.get("entry_titles"), list) and not isinstance(it.get("entry_titles"), list):
+                                it["entry_titles"] = meta.get("entry_titles")
+                            if isinstance(meta.get("entry_titles"), list) and isinstance(it.get("entry_titles"), list) and not it.get("entry_titles"):
+                                it["entry_titles"] = meta.get("entry_titles")
+                        fetched += 1
+                    except Exception as e:
+                        fetch_errors.append({"url": url, "error": str(e)[:200]})
+
+            if not str(it.get("host") or "").strip():
+                it["host"] = _extract_host(url)
+            if str(it.get("name") or "").strip() or str(it.get("seed_last_updated") or "").strip() or str(it.get("feed_type") or "").strip():
+                autofilled += 1
+
+        await asyncio.gather(*[_fill_one(it) for it in unique_items])
+
     preview_hash = _preview_hash(csv_text)
     sample = unique_items[:10]
+
+    autofill_csv_text = ""
+    autofill_preview_hash = ""
+    if fmt == "url_only" and unique_items:
+        out = io.StringIO()
+        w = csv.writer(out)
+        for it in unique_items:
+            w.writerow(
+                [
+                    str(it.get("name") or "").strip(),
+                    str(it.get("url") or "").strip(),
+                    str(it.get("seed_last_updated") or "").strip(),
+                    str(it.get("category") or "").strip(),
+                    str(it.get("feed_type") or "").strip(),
+                    str(it.get("country") or "").strip(),
+                    str(it.get("language") or "").strip(),
+                    str(it.get("source") or "").strip(),
+                    str(it.get("added_at") or "").strip(),
+                ]
+            )
+        autofill_csv_text = out.getvalue()
+        autofill_preview_hash = _preview_hash(autofill_csv_text)
+
     return JSONResponse(
         content={
             "ok": True,
             "preview_hash": preview_hash,
             "detected_format": fmt,
             "expected": {
+                "url_only": ["<url_per_line>", "Preview will autofill fields and convert to headerless CSV"],
                 "headerless_fixed_order": [
                     "name",
                     "url",
@@ -1214,10 +1432,16 @@ async def api_admin_rss_sources_import_csv_preview(request: Request):
                 "updated": updated,
                 "duplicates": len(duplicates),
                 "invalid": len(invalid),
+                "autofilled": int(autofilled),
+                "from_db": int(from_db),
+                "fetched": int(fetched),
             },
             "invalid_rows": invalid[:50],
             "duplicate_rows": duplicates[:50],
             "sample": sample,
+            "fetch_errors": fetch_errors[:30],
+            "autofill_csv_text": autofill_csv_text,
+            "autofill_preview_hash": autofill_preview_hash,
         }
     )
 
@@ -1667,3 +1891,257 @@ async def api_admin_rss_sources_export(request: Request):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=admin_rss_catalog_all.csv"},
     )
+
+
+@router.get("/api/admin/rss-sources/{source_id}/entries")
+async def api_admin_get_source_entries(request: Request, source_id: str):
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    try:
+        cur = conn.execute(
+            "SELECT title, url, published_at, created_at FROM rss_entries WHERE source_id = ? ORDER BY published_at DESC LIMIT 10",
+            (source_id,)
+        )
+        rows = cur.fetchall()
+        entries = []
+        for r in rows:
+            title = r[0] or "No Title"
+            url = r[1] or ""
+            pub = r[2] or r[3] or 0
+            entries.append({"title": title, "url": url, "time": _ts_to_str(pub)})
+        return JSONResponse({"entries": entries})
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+
+class UpdateSourceReq(BaseModel):
+    source_id: str
+    name: str | None = None
+    url: str | None = None
+    category: str | None = None
+    feed_type: str | None = None
+    country: str | None = None
+    language: str | None = None
+    source: str | None = None
+    enabled: int | None = None
+    scrape_rules: str | None = None
+
+
+@router.post("/api/admin/rss-sources/update")
+async def api_admin_update_source(request: Request, req: UpdateSourceReq):
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    
+    # 1. Check if exists
+    cur = conn.execute("SELECT id, url FROM rss_sources WHERE id = ?", (req.source_id,))
+    row = cur.fetchone()
+    if not row:
+        return JSONResponse({"detail": "Source not found"}, status_code=404)
+    
+    # 2. Build Update SQL
+    fields = []
+    values = []
+    
+    if req.name is not None:
+        fields.append("name = ?")
+        values.append(req.name.strip())
+    
+    if req.url is not None:
+        new_url = req.url.strip()
+        if new_url and new_url != row[1]:
+            # Check for duplicate URL
+            cur = conn.execute("SELECT id FROM rss_sources WHERE url = ? AND id != ?", (new_url, req.source_id))
+            if cur.fetchone():
+                 return JSONResponse({"detail": f"URL already exists: {new_url}"}, status_code=400)
+            fields.append("url = ?")
+            values.append(new_url)
+            # Update host if url changes
+            try:
+                from urllib.parse import urlparse
+                host = urlparse(new_url).netloc
+                fields.append("host = ?")
+                values.append(host)
+            except:
+                pass
+
+    if req.category is not None:
+        fields.append("category = ?")
+        values.append(req.category.strip())
+
+    if req.feed_type is not None:
+        fields.append("feed_type = ?")
+        values.append(req.feed_type.strip())
+        
+    if req.country is not None:
+        fields.append("country = ?")
+        values.append(req.country.strip())
+
+    if req.language is not None:
+        fields.append("language = ?")
+        values.append(req.language.strip())
+        
+    if req.source is not None:
+        fields.append("source = ?")
+        values.append(req.source.strip())
+        
+    if req.scrape_rules is not None:
+        fields.append("scrape_rules = ?")
+        values.append(req.scrape_rules.strip())
+        
+    if req.enabled is not None:
+        fields.append("enabled = ?")
+        values.append(1 if req.enabled else 0)
+
+    if not fields:
+        return JSONResponse({"ok": True, "msg": "No changes"})
+
+    fields.append("updated_at = ?")
+    values.append(_now_ts())
+    
+    values.append(req.source_id)
+    
+    sql = f"UPDATE rss_sources SET {', '.join(fields)} WHERE id = ?"
+    try:
+        conn.execute(sql, tuple(values))
+        conn.commit()
+        return JSONResponse({"ok": True, "source_id": req.source_id})
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+@router.get("/api/admin/tool/fetch-html")
+async def api_admin_tool_fetch_html(request: Request, url: str):
+    _require_admin(request)
+    if not url:
+         return JSONResponse({"detail": "Missing url"}, status_code=400)
+    
+    try:
+        import requests
+        headers = {
+            "User-Agent": "TrendRadar/1.0 (VisualSelector)",
+        }
+        import traceback
+        resp = requests.get(url, headers=headers, timeout=15, verify=False)
+        resp.raise_for_status()
+        
+        # Post-process HTML
+        html = resp.text
+        
+        # 1. Inject <base> for relative links
+        # Simple heuristic: insert after <head>
+        base_tag = f'<base href="{url}">'
+        if "<head>" in html:
+            html = html.replace("<head>", f"<head>{base_tag}", 1)
+        elif "<HEAD>" in html:
+             html = html.replace("<HEAD>", f"<HEAD>{base_tag}", 1)
+        else:
+             # Fallback
+             html = f"{base_tag}{html}"
+
+        # 2. Disable Scripts (Basic Regex)
+        import re
+        html = re.sub(r'<script.*?>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        # Also remove external scripts
+        html = re.sub(r'<script.*?>', '', html, flags=re.IGNORECASE)
+        
+        # 3. Inject Click Listener Script? 
+        # Actually better to do this in the iframe on load from the parent, 
+        # OR inject a small script here that communicates with parent.
+        # Let's inject a script that handles text selection blocking and highlighting.
+        
+        injector_script = """
+        <style>
+            .trendradar-highlight {
+                outline: 2px solid #ef4444 !important;
+                background-color: rgba(239, 68, 68, 0.1) !important;
+                cursor: crosshair !important;
+            }
+        </style>
+        <script>
+            function getCssSelector(el) {
+                if (!(el instanceof Element)) return;
+                var path = [];
+                while (el.nodeType === Node.ELEMENT_NODE) {
+                    var selector = el.nodeName.toLowerCase();
+                    if (el.id) {
+                        selector += '#' + el.id;
+                        path.unshift(selector);
+                        break;
+                    } else {
+                        var sib = el, nth = 1;
+                        while (sib = sib.previousElementSibling) {
+                            if (sib.nodeName.toLowerCase() == selector)
+                                nth++;
+                        }
+                        if (nth != 1)
+                            selector += ":nth-of-type("+nth+")";
+                        // Prefer class if available and meaningful
+                        if (el.classList.length > 0 && !el.classList.contains('trendradar-highlight')) {
+                            // cleanup highlighting classes
+                            let cls = Array.from(el.classList).filter(c => c !== 'trendradar-highlight').join('.');
+                            if (cls) selector = el.nodeName.toLowerCase() + "." + cls;
+                        }
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                    if (el.nodeName.toLowerCase() === 'html') break;
+                }
+                return path.join(" > ");
+            }
+
+            document.addEventListener('mouseover', function(e) {
+                e.stopPropagation();
+                // Remove existing
+                document.querySelectorAll('.trendradar-highlight').forEach(el => el.classList.remove('trendradar-highlight'));
+                // Add new
+                e.target.classList.add('trendradar-highlight');
+            }, true);
+            
+            document.addEventListener('mouseout', function(e) {
+                e.stopPropagation();
+                e.target.classList.remove('trendradar-highlight');
+            }, true);
+            
+            document.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const target = e.target;
+                const selector = getCssSelector(target);
+                // Send info to parent
+                window.parent.postMessage({
+                    type: 'TRENDRADAR_ELEMENT_SELECTED',
+                    tagName: target.tagName,
+                    id: target.id,
+                    selector: selector,
+                    innerText: target.innerText.substring(0, 50)
+                }, '*');
+            }, true);
+        </script>
+        """
+        
+        if "</body>" in html:
+            html = html.replace("</body>", f"{injector_script}</body>", 1)
+        else:
+            html += injector_script
+            
+        return Response(content=html, media_type="text/html")
+
+    except Exception as e:
+        print(f"Error fetching {url}: {e}")
+        traceback.print_exc()
+        error_html = f"""
+        <html>
+        <body style="font-family: system-ui, -apple-system, sans-serif; padding: 2rem; text-align: center; color: #374151;">
+            <div style="background: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 2rem; max-width: 600px; margin: 0 auto;">
+                <h3 style="color: #dc2626; margin-top: 0;">Failed to Load Page</h3>
+                <p style="margin-bottom: 1rem;"><strong>URL:</strong> {url}</p>
+                <div style="background: white; padding: 1rem; border-radius: 4px; border: 1px solid #e5e7eb; font-family: monospace; text-align: left; overflow-x: auto; font-size: 13px;">
+                    {str(e)}
+                </div>
+                <p style="margin-top: 1.5rem; font-size: 0.9rem; color: #6b7280;">
+                    Tip: Ensure the URL leads to a valid HTML page, not an XML feed or API endpoint.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        return Response(content=error_html, media_type="text/html", status_code=500)

@@ -266,6 +266,19 @@ class NewsViewerService:
                 if str(pid or "").strip()
             ]
         )
+        
+        # Also load disabled NewsNow platforms from database
+        try:
+            from .db_online import get_online_db_conn
+            conn = get_online_db_conn(self.project_root)
+            cur = conn.execute("SELECT id FROM newsnow_platforms WHERE enabled = 0")
+            rows = cur.fetchall()
+            for r in rows:
+                disabled_set.add(str(r[0]))
+        except Exception:
+            # Silently ignore database errors (table might not exist)
+            pass
+        
         if disabled_set:
             filtered_news = [n for n in filtered_news if str(n.get("platform") or "").strip() not in disabled_set]
             removed_news = [n for n in removed_news if str(n.get("platform") or "").strip() not in disabled_set]

@@ -126,6 +126,44 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entry_ai_labels_labeled_at ON rss_entry_ai_labels(labeled_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entry_ai_labels_action_score ON rss_entry_ai_labels(action, score DESC)")
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS custom_sources (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            provider_type TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            enabled BOOLEAN DEFAULT 1,
+            schedule_cron TEXT,
+            category TEXT DEFAULT '', 
+            country TEXT DEFAULT '',
+            language TEXT DEFAULT '',
+            last_run_at TEXT,
+            last_status TEXT,
+            last_error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS newsnow_platforms (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT DEFAULT '',
+            enabled BOOLEAN DEFAULT 1,
+            sort_order INTEGER DEFAULT 0,
+            last_fetch_at TEXT,
+            last_status TEXT,
+            last_error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -150,7 +188,13 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("rss_sources", "source", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_sources", "seed_last_updated", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_sources", "added_at", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("rss_sources", "scrape_rules", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_source_requests", "title", "TEXT NOT NULL DEFAULT ''")
+    
+    # Custom Sources columns
+    _ensure_column("custom_sources", "category", "TEXT DEFAULT ''")
+    _ensure_column("custom_sources", "country", "TEXT DEFAULT ''")
+    _ensure_column("custom_sources", "language", "TEXT DEFAULT ''")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")

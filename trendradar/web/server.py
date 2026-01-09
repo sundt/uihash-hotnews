@@ -56,6 +56,8 @@ from trendradar.web.online_routes import router as _online_router
 from trendradar.web.viewer_controls_routes import router as _viewer_controls_router
 from trendradar.web.fetch_metrics_routes import router as _fetch_metrics_router
 from trendradar.web.system_routes import router as _system_router
+from trendradar.web.custom_source_admin import router as _custom_source_router
+from trendradar.web.newsnow_admin import router as _newsnow_router
 from trendradar.web.user_db import (
     create_user_with_cookie_identity,
     get_user_db_conn,
@@ -460,6 +462,8 @@ app.include_router(_online_router)
 app.include_router(_viewer_controls_router)
 app.include_router(_fetch_metrics_router)
 app.include_router(_system_router)
+app.include_router(_custom_source_router)
+app.include_router(_newsnow_router)
 
 # 挂载静态文件目录（带缓存控制）
 static_dir = Path(__file__).parent / "static"

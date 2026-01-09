@@ -12,7 +12,10 @@ from trendradar.storage import StorageManager
 from trendradar.storage.base import NewsData, NewsItem
 
 from .base import ProviderFetchContext, ProviderFetchError, ProviderFetchResult
+from .base import ProviderFetchContext, ProviderFetchError, ProviderFetchResult
 from .registry import ProviderRegistry
+from trendradar.web.db_online import get_online_db_conn
+
 
 
 @dataclass(frozen=True)
@@ -23,18 +26,80 @@ class ProviderIngestionConfig:
     platforms: List[Dict[str, Any]]
 
 
-def _parse_provider_ingestion_config(config: Dict[str, Any]) -> ProviderIngestionConfig:
+@dataclass(frozen=True)
+class ProviderIngestionConfig:
+    """Configuration for running provider ingestion."""
+
+    enabled: bool
+    platforms: List[Dict[str, Any]]
+
+
+def _load_custom_sources(root: Path) -> List[Dict[str, Any]]:
+    """Load custom sources from SQLite."""
+    try:
+        conn = get_online_db_conn(root)
+        # Ensure table exists (in case schema.sql wasn't run separately, though it should be)
+        # We rely on schema.sql having been applied, but we can double check or fail gracefully.
+        cur = conn.execute("SELECT id, name, provider_type, config_json, enabled FROM custom_sources WHERE enabled = 1")
+        rows = cur.fetchall()
+        
+        custom_platforms = []
+        for r in rows:
+            try:
+                platform_id = str(r[0] or "").strip()
+                name = str(r[1] or "").strip()
+                provider = str(r[2] or "").strip()
+                config_str = str(r[3] or "{}")
+                
+                if not platform_id or not provider:
+                    continue
+                    
+                config = json.loads(config_str)
+                if not isinstance(config, dict):
+                    config = {}
+                
+                custom_platforms.append({
+                    "id": platform_id,
+                    "name": name,
+                    "provider": provider,
+                    "config": config
+                })
+            except Exception:
+                continue
+        return custom_platforms
+    except Exception as e:
+        print(f"Error loading custom sources: {e}")
+        return []
+
+
+def _parse_provider_ingestion_config(config: Dict[str, Any], project_root: Optional[Path] = None) -> ProviderIngestionConfig:
     raw = config.get("PROVIDER_INGESTION")
-    if not isinstance(raw, dict):
+    
+    # Defaults
+    enabled_yaml = False
+    platforms_yaml = []
+    
+    if isinstance(raw, dict):
+        enabled_yaml = bool(raw.get("enabled", False))
+        platforms = raw.get("platforms")
+        if isinstance(platforms, list):
+            platforms_yaml = platforms
+
+    # Load custom sources from DB if project_root provided
+    platforms_db = []
+    if project_root:
+        platforms_db = _load_custom_sources(project_root)
+
+    # If neither (YAML enabled) nor (DB sources exist), then disabled. 
+    # But usually we validly treat DB sources as enabled sources regardless of YAML master switch? 
+    # Let's say YAML master switch controls YAML sources, DB sources are always enabled if they are in DB as enabled.
+    
+    all_platforms_raw = platforms_yaml + platforms_db
+    if not all_platforms_raw:
         return ProviderIngestionConfig(enabled=False, platforms=[])
 
-    enabled = bool(raw.get("enabled", False))
-    platforms = raw.get("platforms")
-    if not isinstance(platforms, list):
-        platforms = []
-
     cleaned: List[Dict[str, Any]] = []
-    for it in platforms:
+    for it in all_platforms_raw:
         if not isinstance(it, dict):
             continue
         platform_id = str(it.get("id") or "").strip()
@@ -47,7 +112,7 @@ def _parse_provider_ingestion_config(config: Dict[str, Any]) -> ProviderIngestio
             continue
         cleaned.append({"id": platform_id, "name": platform_name, "provider": provider_id, "config": platform_config})
 
-    return ProviderIngestionConfig(enabled=enabled, platforms=cleaned)
+    return ProviderIngestionConfig(enabled=True, platforms=cleaned)
 
 
 def _metrics_file_path(project_root: Path) -> Path:
@@ -94,7 +159,8 @@ def run_provider_ingestion_once(
     cfg_path = Path(config_path) if config_path else (root / "config" / "config.yaml")
 
     config = load_config(str(cfg_path))
-    ingestion_cfg = _parse_provider_ingestion_config(config)
+    config = load_config(str(cfg_path))
+    ingestion_cfg = _parse_provider_ingestion_config(config, project_root=root)
     if not ingestion_cfg.enabled or not ingestion_cfg.platforms:
         return True, []
 
@@ -117,6 +183,13 @@ def run_provider_ingestion_once(
     items_by_id: Dict[str, List[NewsItem]] = {}
     failed_ids: List[str] = []
     batch_metrics: List[Dict[str, Any]] = []
+
+    # Update database status for custom sources
+    db_conn = None
+    try:
+        db_conn = get_online_db_conn(root)
+    except Exception:
+        pass
 
     for p in ingestion_cfg.platforms:
         platform_id = p["id"]
@@ -215,7 +288,27 @@ def run_provider_ingestion_once(
             metric["status"] = "error"
             metric["error"] = err
 
+        if status != "success":
+            metric["status"] = "error"
+            metric["error"] = err
+
         batch_metrics.append(metric)
+
+        # Update custom_sources table if this platform is from DB (check existence)
+        if db_conn:
+            try:
+                now_str_db = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+                # We update blindly; if id doesn't exist (it was from YAML), this is a no-op 
+                # or we can check via "SELECT 1" but that's expensive.
+                # Actually, standard update is safe.
+                db_conn.execute("""
+                    UPDATE custom_sources 
+                    SET last_run_at = ?, last_status = ?, last_error = ?, updated_at = ?
+                    WHERE id = ?
+                """, (now_str_db, status, err, now_str_db, platform_id))
+                db_conn.commit()
+            except Exception:
+                pass
 
     if items_by_id:
         data = NewsData(
@@ -257,11 +350,23 @@ def build_default_registry() -> ProviderRegistry:
         pass
 
     try:
+        from .playwright_provider import PlaywrightProvider
+        reg.register(PlaywrightProvider())
+    except Exception:
+        pass
+
+    try:
         from .http_json import HttpJsonProvider
 
         reg.register(HttpJsonProvider())
     except Exception:
         # provider optional; keep registry usable even if import fails
+        pass
+
+    try:
+        from .html_scraper import HtmlScraperProvider
+        reg.register(HtmlScraperProvider())
+    except Exception:
         pass
 
     return reg

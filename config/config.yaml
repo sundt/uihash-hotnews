@@ -90,50 +90,7 @@ crawler:
 
 provider_ingestion:
   enabled: true
-  platforms:
-    - id: "caixin"
-      name: "财新网"
-      provider: "caixin"
-      config:
-        max_items: 60
-        timeout_s: 12
-        rss_urls: []
-        html_urls:
-          - "https://www.caixin.com/"
-
-    - id: "nba-schedule"
-      name: "NBA赛程"
-      provider: "tencent_nba"
-      config:
-        days: 7
-        max_items: 30
-        timeout_s: 10
-
-    - id: "sina_finance_roll"
-      name: "新浪财经-滚动"
-      provider: "http_json"
-      config:
-        method: "GET"
-        url: "https://feed.mix.sina.com.cn/api/roll/get"
-        params:
-          pageid: 153
-          lid: 2516
-          num: 50
-          page: 1
-        response_path: "result.data"
-        prefix_time: false
-        field_mapping:
-          title: "title"
-          url: "url"
-          source: "media_name"
-          time: "ctime"
-          summary: "intro"
-        rate_limit_rps: 2
-        timeout_s: 15
-        max_items: 60
-        headers:
-          User-Agent: "Mozilla/5.0"
-          Referer: "https://finance.sina.com.cn/"
+  platforms: [] # Migrated to custom_sources DB table
 
 # - daily（当日汇总模式）
 #   • 推送时机：按时推送(默认每小时推送一次)

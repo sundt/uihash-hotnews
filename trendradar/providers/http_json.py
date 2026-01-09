@@ -389,6 +389,30 @@ class HttpJsonProvider:
             title = _stringify(_get_by_path(it, str(title_path))) if title_path else ""
             link = _stringify(_get_by_path(it, str(url_path))) if url_path else ""
 
+            content = ""
+            # If content key is specified in field_mapping (field_mapping.get("content"))
+            # But wait, original code was: title_path = field_mapping.get("title") or field_mapping.get("content")
+            # This implies content was used as fallback for title?!
+            # Let's separate them.
+            
+            # Re-read mapping logic:
+            # title_path = field_mapping.get("title") or field_mapping.get("content")
+            # If user mapped "content" -> "body", then title_path becomes "body" if "title" is missing.
+            # We should probably respect explicit "content" mapping if we want to store content.
+            
+            content_path = field_mapping.get("content_text") # Use "content_text" to avoid conflict or just "content" if we change title logic
+
+            # Let's check custom_source_admin.py or UI to see what keys are generated.
+            # Usually it's "title", "link", "published_at". 
+            # I will add "content" support.
+            
+            content_path = field_mapping.get("content")
+            if content_path == title_path and field_mapping.get("title"):
+                 # if content is mapped to same as title, maybe it's fine?
+                 pass
+            elif content_path:
+                 content = _stringify(_get_by_path(it, str(content_path)))
+
             if strip_title_bracket_prefix:
                 for _ in range(2):
                     s = (title or "").strip()
@@ -405,6 +429,10 @@ class HttpJsonProvider:
             dt = _parse_time_any(_get_by_path(it, str(time_path))) if time_path else None
             src = _stringify(_get_by_path(it, str(source_path))) if source_path else ""
             summary = _stringify(_get_by_path(it, str(summary_path))) if summary_path else ""
+
+            # If content is empty, use summary
+            if not content and summary:
+                content = summary
 
             tags_v = _get_by_path(it, str(tags_path)) if tags_path else None
             tags_s = ""
@@ -442,6 +470,7 @@ class HttpJsonProvider:
                         rank=0,
                         url=link,
                         mobile_url="",
+                        content=content,
                         crawl_time=ctx.now.strftime("%H:%M"),
                     ),
                 )

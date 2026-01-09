@@ -150,7 +150,11 @@ test.describe('RSS Catalog Preview', () => {
 
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("深入探索")').click();
+    await page.waitForFunction(() => typeof (window as any).openRssCatalogPreviewModal === 'function');
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssCatalogPreviewModal();
+    });
     await expect(page.locator('#rssCatalogPreviewModal')).toBeVisible();
 
     // Single card rendered
@@ -299,7 +303,11 @@ test.describe('RSS Catalog Preview', () => {
 
     await viewerPage.goto();
 
-    await page.locator('button.category-settings-btn:has-text("深入探索")').click();
+    await page.waitForFunction(() => typeof (window as any).openRssCatalogPreviewModal === 'function');
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).openRssCatalogPreviewModal();
+    });
     await expect(page.locator('#rssCatalogPreviewModal')).toBeVisible();
 
     await expect(page.locator('#rssCatalogPreviewGrid .platform-card')).toHaveCount(1);

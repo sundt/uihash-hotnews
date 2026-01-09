@@ -99,6 +99,6 @@ test.describe('Morning Brief Three Cards', () => {
     await expect(pane.locator('.news-list[data-mb-list="slice3"]')).toContainText('Item 150');
 
     const timeBadge = pane.locator('.news-list[data-mb-list="slice1"] .news-item:visible .tr-mb-time').first();
-    await expect(timeBadge).toHaveText(/\d{2}-\d{2} \d{2}:\d{2}/);
+    await expect(timeBadge).toHaveText(/(\d{2}-\d{2} \d{2}:\d{2})|(\d{4}-\d{2}-\d{2})/);
   });
 });

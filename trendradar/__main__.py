@@ -18,6 +18,29 @@ from trendradar import __version__
 from trendradar.core import load_config
 from trendradar.crawler import DataFetcher
 from trendradar.storage import convert_crawl_results_to_news_data
+from trendradar.web.db_online import get_online_db_conn
+
+
+def _load_enabled_newsnow_platforms(project_root):
+    """从数据库加载启用的 NewsNow 平台列表"""
+    try:
+        conn = get_online_db_conn(Path(project_root))
+        cur = conn.execute(
+            "SELECT id, name FROM newsnow_platforms WHERE enabled = 1 ORDER BY sort_order ASC"
+        )
+        rows = cur.fetchall()
+        platforms = []
+        for r in rows:
+            platforms.append({
+                "id": str(r[0]),
+                "name": str(r[1])
+            })
+        if platforms:
+            print(f"从数据库加载了 {len(platforms)} 个启用的 NewsNow 平台")
+        return platforms
+    except Exception as e:
+        print(f"从数据库加载平台失败: {e}，将使用配置文件中的平台")
+        return None
 
 
 def check_version_update(
@@ -104,6 +127,14 @@ class NewsAnalyzer:
         print("正在加载配置...")
         config = load_config()
         print(f"TrendRadar v{__version__} 配置加载完成")
+        
+        # 尝试从数据库加载启用的 NewsNow 平台
+        db_platforms = _load_enabled_newsnow_platforms(os.getcwd())
+        if db_platforms:
+            # 如果数据库有数据，优先使用数据库中的平台列表
+            config['PLATFORMS'] = db_platforms
+            print(f"使用数据库中的平台列表")
+        
         print(f"监控平台数量: {len(config['PLATFORMS'])}")
         print(f"时区: {config.get('TIMEZONE', 'Asia/Shanghai')}")
 

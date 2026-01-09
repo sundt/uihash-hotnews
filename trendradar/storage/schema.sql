@@ -20,8 +20,10 @@ CREATE TABLE IF NOT EXISTS news_items (
     title TEXT NOT NULL,
     platform_id TEXT NOT NULL,
     rank INTEGER NOT NULL,
+    year_month TEXT DEFAULT '',
     url TEXT DEFAULT '',
     mobile_url TEXT DEFAULT '',
+    content TEXT DEFAULT '',       -- 新闻正文/摘要
     first_crawl_time TEXT NOT NULL,      -- 首次抓取时间
     last_crawl_time TEXT NOT NULL,       -- 最后抓取时间
     crawl_count INTEGER DEFAULT 1,       -- 抓取次数
@@ -91,6 +93,30 @@ CREATE TABLE IF NOT EXISTS push_records (
     push_time TEXT,
     report_type TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 自定义数据源配置表 (Unified Ingestion)
+-- 用于存储 API/HTML 等非 RSS 的抓取配置
+-- ============================================
+CREATE TABLE IF NOT EXISTS custom_sources (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    provider_type TEXT NOT NULL,  -- 'http_json', 'html_scraper', etc.
+    config_json TEXT NOT NULL,    -- JSON blob for provider-specific config
+    enabled BOOLEAN DEFAULT 1,
+    schedule_cron TEXT,           -- Optional: independent schedule (e.g., '*/15 * * * *')
+    category TEXT DEFAULT '',     -- Category classification
+    country TEXT DEFAULT '',      -- Country code (e.g., CN, US)
+    language TEXT DEFAULT '',     -- Language code (e.g., zh, en)
+    last_run_at TEXT,
+    last_status TEXT,             -- 'success', 'error'
+    last_error TEXT,
+    backoff_until TEXT,           -- Backoff mechanism - retry after this timestamp
+    entries_count INTEGER DEFAULT 0,  -- Total entries fetched (cumulative)
+    fail_count INTEGER DEFAULT 0,     -- Total failed fetches count
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
