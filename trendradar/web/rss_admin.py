@@ -186,6 +186,7 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
                 country = (row.get("国家") or "").strip()
                 language = (row.get("语言") or "").strip()
                 source = (row.get("来源") or "").strip()
+                added_at = (row.get("添加时间") or "").strip()
 
                 url = _validate_and_normalize_url(url_raw)
                 if not name:
@@ -201,6 +202,7 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
                         "country": country,
                         "language": language,
                         "source": source,
+                        "added_at": added_at,
                     }
                 )
             except Exception as e:
@@ -217,7 +219,7 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
                 continue
             try:
                 cols = [str(x or "").strip() for x in row]
-                if len(cols) != 8:
+                if len(cols) not in (8, 9):
                     raise ValueError("Wrong column count")
                 name = cols[0]
                 url_raw = cols[1]
@@ -227,6 +229,7 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
                 country = cols[5]
                 language = cols[6]
                 source = cols[7]
+                added_at = cols[8] if len(cols) >= 9 else ""
                 url = _validate_and_normalize_url(url_raw)
                 if not name:
                     name = _extract_host(url)
@@ -241,6 +244,7 @@ def _parse_csv_text(csv_text: str) -> Tuple[str, List[Dict[str, Any]], List[Dict
                         "country": country,
                         "language": language,
                         "source": source,
+                        "added_at": added_at,
                     }
                 )
             except Exception as e:
@@ -259,6 +263,12 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
     url = str(item.get("url") or "").strip()
     cur = conn.execute("SELECT id FROM rss_sources WHERE url = ? LIMIT 1", (url,))
     row = cur.fetchone()
+
+    raw_added_at = item.get("added_at")
+    parsed_added_at = _parse_ts_loose(raw_added_at)
+    if parsed_added_at <= 0:
+        parsed_added_at = int(now)
+
     if row and str(row[0] or "").strip():
         sid = str(row[0]).strip()
         if write:
@@ -273,6 +283,7 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
                     language = ?,
                     source = ?,
                     seed_last_updated = ?,
+                    added_at = CASE WHEN (added_at IS NULL OR added_at = 0) THEN ? ELSE added_at END,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -285,6 +296,7 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
                     str(item.get("language") or "").strip(),
                     str(item.get("source") or "").strip(),
                     str(item.get("seed_last_updated") or "").strip(),
+                    int(parsed_added_at),
                     int(now),
                     sid,
                 ),
@@ -314,7 +326,7 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
                 str(item.get("seed_last_updated") or "").strip(),
                 int(now),
                 int(now),
-                int(now),
+                int(parsed_added_at),
             ),
         )
         cur2 = conn.execute("SELECT changes()")
@@ -1191,8 +1203,9 @@ async def api_admin_rss_sources_import_csv_preview(request: Request):
                     "country",
                     "language",
                     "source",
+                    "added_at",
                 ],
-                "headered_zh": ["标题", "订阅地址", "最后更新", "分类", "类型", "国家", "语言", "来源"],
+                "headered_zh": ["标题", "订阅地址", "最后更新", "分类", "类型", "国家", "语言", "来源", "添加时间"],
             },
             "summary": {
                 "total_rows": len(parsed) + len(invalid),

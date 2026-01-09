@@ -64,11 +64,11 @@
       <div class="muted" style="margin-bottom:8px;">
         Supported formats:
         <div style="margin-top:4px;">
-          <div><b>Headerless fixed-order (8 columns)</b>: name,url,seed_last_updated,category,feed_type,country,language,source</div>
-          <div><b>Chinese headers</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源</div>
+          <div><b>Headerless fixed-order (8/9 columns)</b>: name,url,seed_last_updated,category,feed_type,country,language,source[,added_at]</div>
+          <div><b>Chinese headers</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源,添加时间</div>
         </div>
       </div>
-      <textarea id="csv-import-text" style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;" placeholder="Example:\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加"></textarea>
+      <textarea id="csv-import-text" style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;" placeholder="Example:\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加,2026-01-09 10:00"></textarea>
       <div style="height:10px;"></div>
       <div class="row" style="align-items:center;">
         <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
