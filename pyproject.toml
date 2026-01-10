@@ -1,7 +1,7 @@
 [project]
-name = "trendradar-mcp"
+name = "hotnews-mcp"
 version = "1.1.0"
-description = "TrendRadar MCP Server - 新闻热点聚合工具"
+description = "Hotnews MCP Server - 新闻热点聚合工具"
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.32.5,<3.0.0",
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-trendradar = "mcp_server.server:run_server"
+hotnews = "mcp_server.server:run_server"
 
 [dependency-groups]
 dev = []

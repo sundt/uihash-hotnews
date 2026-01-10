@@ -16,9 +16,9 @@ body:
 
         #### 1️⃣ **建议先查看文档** 📖
         大部分常见问题在文档中都有详细说明，建议先查看相关章节：
-        - [📝 配置教程](https://github.com/sansan0/TrendRadar#-快速开始)
-        - [❓ 常见问题](https://github.com/sansan0/TrendRadar#问题答疑与1元点赞)
-        - [🐳 Docker部署](https://github.com/sansan0/TrendRadar#-docker-部署)
+        - [📝 配置教程](https://github.com/sansan0/Hotnews#-快速开始)
+        - [❓ 常见问题](https://github.com/sansan0/Hotnews#问题答疑与1元点赞)
+        - [🐳 Docker部署](https://github.com/sansan0/Hotnews#-docker-部署)
 
         #### 2️⃣ **测试推送功能的注意事项** ⚠️
         测试消息推送时，请确保以下配置正确：
@@ -47,7 +47,7 @@ body:
         #### 5️⃣ **根据部署方式提供完整信息** 📦
 
         **如果是 GitHub Actions 部署：**
-        1. **必须提供** Actions 工作流链接（如：`https://github.com/你的用户名/TrendRadar/actions/workflows/crawler.yml`）
+        1. **必须提供** Actions 工作流链接（如：`https://github.com/你的用户名/Hotnews/actions/workflows/crawler.yml`）
         2. **查看执行日志的步骤：**
            - 打开你的仓库页面
            - 点击顶部的 **Actions** 标签

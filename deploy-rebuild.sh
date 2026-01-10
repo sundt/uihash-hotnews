@@ -263,7 +263,7 @@ verify() {
     echo "ERROR: viewer health check failed"
     docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
     echo "--- viewer logs (tail) ---"
-    docker logs --tail 200 trend-radar-viewer 2>&1 || true
+    docker logs --tail 200 hotnews-viewer 2>&1 || true
     exit 1
   fi
 
@@ -275,7 +275,7 @@ verify() {
 
   if [ "${dry_run}" != "true" ]; then
     missing=0
-    for n in trend-radar trend-radar-viewer trend-radar-mcp; do
+    for n in hotnews hotnews-viewer hotnews-mcp; do
       if ! docker ps --format '{{.Names}}' | grep -x "${n}" >/dev/null 2>&1; then
         echo "ERROR: container not running: ${n}"
         missing=1
@@ -289,8 +289,8 @@ verify() {
 
 rebuild_all() {
   cd "${remote_path}/docker"
-  run docker compose -f docker-compose-build.yml build trend-radar trend-radar-viewer trend-radar-mcp
-  run docker compose -f docker-compose-build.yml up -d --force-recreate trend-radar trend-radar-viewer trend-radar-mcp
+  run docker compose -f docker-compose-build.yml build hotnews hotnews-viewer hotnews-mcp
+  run docker compose -f docker-compose-build.yml up -d --force-recreate hotnews hotnews-viewer hotnews-mcp
 }
 
 rollback_attempted=0
@@ -347,6 +347,7 @@ run git checkout -q "${branch}"
 old_head=$(git rev-parse HEAD)
 
 run git pull --ff-only origin "${branch}"
+run git submodule update --init --recursive
 
 rebuild_all
 verify

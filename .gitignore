@@ -96,10 +96,13 @@ test-results/
 
 # [KERNEL] Private Logic
 # Ignore all content in kernel except the init files (to preserve structure)
-trendradar/kernel/
-!trendradar/kernel/
-!trendradar/kernel/__init__.py
-!trendradar/kernel/admin/__init__.py
-!trendradar/kernel/scheduler/__init__.py
-!trendradar/kernel/static/
-!trendradar/kernel/templates/
+hotnews/kernel/
+!hotnews/kernel/
+!hotnews/kernel/__init__.py
+!hotnews/kernel/admin/__init__.py
+!hotnews/kernel/scheduler/__init__.py
+!hotnews/kernel/static/
+!hotnews/kernel/templates/
+
+# Documentation
+docs/

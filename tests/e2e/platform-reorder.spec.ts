@@ -15,8 +15,8 @@ test.describe('Platform Reorder', () => {
       // NOTE: addInitScript runs on every navigation (including reload).
       // We only want to clear storage once at the beginning of the test.
       if (!sessionStorage.getItem('__e2e_platform_reorder_cleared')) {
-        localStorage.removeItem('trendradar_categories_config');
-        localStorage.removeItem('trendradar_active_tab');
+        localStorage.removeItem('hotnews_categories_config');
+        localStorage.removeItem('hotnews_active_tab');
         sessionStorage.setItem('__e2e_platform_reorder_cleared', '1');
       }
     });
@@ -80,12 +80,12 @@ test.describe('Platform Reorder', () => {
 
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('__e2e_platform_reorder_autoscroll_cleared')) {
-        localStorage.removeItem('trendradar_categories_config');
-        localStorage.removeItem('trendradar_active_tab');
+        localStorage.removeItem('hotnews_categories_config');
+        localStorage.removeItem('hotnews_active_tab');
         // Force ajax refresh path so tests do not depend on server-side rendered output data.
         // Use the default category order as the user config (no semantic change, only triggers refresh).
         localStorage.setItem(
-          'trendradar_categories_config',
+          'hotnews_categories_config',
           JSON.stringify({
             version: 1,
             customCategories: [],

@@ -1302,7 +1302,7 @@ class AnalyticsTools:
                 for news in sample_news:
                     markdown += f"- [{news['platform']}] {news['title']}\n"
 
-            markdown += "\n---\n\n*本报告由 TrendRadar MCP 自动生成*\n"
+            markdown += "\n---\n\n*本报告由 Hotnews MCP 自动生成*\n"
 
             return {
                 "success": True,

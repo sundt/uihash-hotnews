@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Admin RSS CSV Import', () => {
   test('should preview, commit, enforce preview_hash flow, and show validation errors', async ({ page }) => {
-    const adminToken = process.env.TREND_RADAR_ADMIN_TOKEN || '';
-    test.skip(!adminToken, 'TREND_RADAR_ADMIN_TOKEN is not set; skipping admin import E2E');
+    const adminToken = process.env.HOTNEWS_ADMIN_TOKEN || '';
+    test.skip(!adminToken, 'HOTNEWS_ADMIN_TOKEN is not set; skipping admin import E2E');
 
     const urlSeed = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const feedUrl = `https://example.com/admin-import-${urlSeed}/feed.xml`;

@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索</title>
+    <link rel="icon" href="{{ static_prefix }}/images/hxlogo.jpg?v={{ asset_rev }}" type="image/jpeg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
+    <style>
+        #searchPanels {
+            --tr-search-card-height: clamp(700px, calc(100vh - 260px), 1100px);
+        }
+
+        #searchPanels.platform-grid > .platform-card {
+            flex: 0 0 calc((100% - 20px) / 3);
+            width: calc((100% - 20px) / 3);
+            height: var(--tr-search-card-height);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        #searchPanels.platform-grid > .platform-card .tr-panel-body {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #searchPanels.platform-grid > .platform-card .news-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        #searchPanels.platform-grid > .platform-card .news-list::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        @media (max-width: 1024px) {
+            #searchPanels.platform-grid > .platform-card {
+                flex: 0 0 calc((100% - 10px) / 2);
+                width: calc((100% - 10px) / 2);
+            }
+        }
+
+        @media (max-width: 640px) {
+            #searchPanels.platform-grid > .platform-card {
+                flex: 0 0 100%;
+                width: 100%;
+            }
+        }
+
+        .tr-newdot {
+            display: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: #dc3545;
+            border: 0;
+            padding: 0;
+            margin-right: 6px;
+        }
+
+        .platform-card.tr-has-new .tr-newdot {
+            display: inline-block;
+        }
+
+        .tr-newdot:focus {
+            outline: 2px solid rgba(220, 53, 69, 0.35);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-card">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a href="/" class="btn btn-sm btn-outline-secondary">返回</a>
+                <div class="flex-grow-1" style="min-width: 240px;">
+                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..." value="{{ q or '' }}" />
+                </div>
+                <select id="searchMode" class="form-select form-select-sm" style="width: 140px;">
+                    <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>混合</option>
+                    <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>关键词</option>
+                    <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>语义</option>
+                </select>
+                <button id="searchBtn" class="btn btn-sm btn-primary">搜索</button>
+                <button id="clearBtn" class="btn btn-sm btn-outline-secondary">清空</button>
+            </div>
+            <div class="text-muted" style="margin-top: 8px; font-size: 12px;">
+                查询范围：最近 {{ search_days }} 天，可查询多个关键字，每个关键字一个卡片
+            </div>
+        </div>
+
+        <div id="searchPanels" class="platform-grid"></div>
+    </div>
+
+    <script>
+        (function() {
+            function getParams() {
+                try {
+                    return new URLSearchParams(window.location.search || '');
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function esc(s) {
+                return String(s || '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#39;');
+            }
+
+            var panelsEl = document.getElementById('searchPanels');
+            var panelSeq = 1;
+            var STORAGE_KEY = 'hotnews_search_panels_v1';
+            var SEEN_KEY = 'hotnews_search_seen_v1';
+            var MAX_SAVED_PANELS = 20;
+            var MAX_SEEN_PER_PANEL = 400;
+            var CHECK_LIMIT = 30;
+            var CHECK_TICK_MS = 7000;
+            var isRestoring = false;
+            var _seenMap = (function() {
+                try {
+                    var raw = localStorage.getItem(SEEN_KEY);
+                    if (!raw) return {};
+                    var obj = JSON.parse(raw);
+                    return obj && typeof obj === 'object' ? obj : {};
+                } catch (e) {
+                    return {};
+                }
+            })();
+
+            function _panelKey(q, mode) {
+                return String(q || '').trim() + '||' + String(mode || 'hybrid').trim();
+            }
+
+            function _persistSeen() {
+                try {
+                    localStorage.setItem(SEEN_KEY, JSON.stringify(_seenMap || {}));
+                } catch (e) {
+                }
+            }
+
+            function _pruneSeenByPanels() {
+                try {
+                    if (!_seenMap || typeof _seenMap !== 'object') _seenMap = {};
+                    var keep = new Set();
+                    var children = Array.from(panelsEl?.children || []);
+                    for (var i = 0; i < children.length; i++) {
+                        var el = children[i];
+                        var q = String(el?.dataset?.query || '').trim();
+                        var m = String(el?.dataset?.mode || 'hybrid').trim() || 'hybrid';
+                        if (!q) continue;
+                        keep.add(_panelKey(q, m));
+                    }
+                    var keys = Object.keys(_seenMap || {});
+                    for (var j = 0; j < keys.length; j++) {
+                        var k = keys[j];
+                        if (!keep.has(k)) {
+                            try { delete _seenMap[k]; } catch (e2) {}
+                        }
+                    }
+                } catch (e) {
+                }
+            }
+
+            function _setPanelHasNew(wrap, hasNew) {
+                if (!wrap) return;
+                try {
+                    if (hasNew) wrap.classList.add('tr-has-new');
+                    else wrap.classList.remove('tr-has-new');
+                } catch (e) {
+                }
+                try {
+                    wrap.dataset.hasNew = hasNew ? '1' : '0';
+                } catch (e) {
+                }
+            }
+
+            function _formatNow() {
+                try {
+                    var d = new Date();
+                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            function _formatTs(ts) {
+                try {
+                    var d = new Date(Number(ts) || Date.now());
+                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                } catch (e) {
+                    return _formatNow();
+                }
+            }
+
+            function _updateUrl(q, mode) {
+                try {
+                    var params = new URLSearchParams();
+                    if (q) params.set('q', q);
+                    if (mode) params.set('mode', mode);
+                    history.replaceState(null, '', '/search' + (params.toString() ? ('?' + params.toString()) : ''));
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+
+            function _persistPanels() {
+                if (isRestoring) return;
+                if (!panelsEl) return;
+                try {
+                    var items = [];
+                    var children = Array.from(panelsEl.children || []);
+                    for (var i = 0; i < children.length; i++) {
+                        var el = children[i];
+                        var q = el?.dataset?.query || '';
+                        var mode = el?.dataset?.mode || '';
+                        var createdAt = el?.dataset?.createdAt || '';
+                        if (!q) continue;
+                        items.push({ q: q, mode: mode || 'hybrid', createdAt: createdAt || String(Date.now()) });
+                        if (items.length >= MAX_SAVED_PANELS) break;
+                    }
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+                    _pruneSeenByPanels();
+                    _persistSeen();
+                } catch (e) {
+                }
+            }
+
+            function _loadPanels() {
+                try {
+                    var raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return [];
+                    var arr = JSON.parse(raw);
+                    return Array.isArray(arr) ? arr : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function _findExistingPanel(q, mode) {
+                if (!panelsEl) return null;
+                var qq = String(q || '').trim();
+                var mm = String(mode || 'hybrid').trim() || 'hybrid';
+                if (!qq) return null;
+                var children = Array.from(panelsEl.children || []);
+                for (var i = 0; i < children.length; i++) {
+                    var el = children[i];
+                    if (!el || !el.dataset) continue;
+                    if (String(el.dataset.query || '').trim() === qq && String(el.dataset.mode || 'hybrid').trim() === mm) {
+                        return {
+                            wrap: el,
+                            statusEl: el.querySelector('[data-role="status"]'),
+                            listEl: el.querySelector('[data-role="list"]'),
+                        };
+                    }
+                }
+                return null;
+            }
+
+            function createPanel(q, mode, opts) {
+                opts = opts || {};
+                if (!panelsEl) return null;
+                var id = 'panel-' + Date.now() + '-' + (panelSeq++);
+                var wrap = document.createElement('div');
+                wrap.className = 'platform-card';
+                wrap.dataset.panelId = id;
+                wrap.dataset.query = String(q || '');
+                wrap.dataset.mode = String(mode || 'hybrid');
+                wrap.dataset.createdAt = String(opts.createdAt != null ? opts.createdAt : Date.now());
+                var timeText = _formatTs(wrap.dataset.createdAt);
+
+                var header = '<div class="platform-header">' +
+                    '<div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: default;">' +
+                    '🔍 ' + esc(q) +
+                    '<span class="header-subtitle" style="margin-left: 10px;">' + esc(mode) + ' · ' + esc(timeText) + '</span>' +
+                    '</div>' +
+                    '<div class="platform-header-actions">' +
+                    '<button type="button" class="tr-newdot" data-action="newdot" title="有新结果，点击刷新" aria-label="有新结果"></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-primary" data-action="refresh">刷新</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">删除</button>' +
+                    '</div>' +
+                    '</div>';
+
+                wrap.innerHTML = header +
+                    '<div class="tr-panel-body" data-role="body">' +
+                    '<div class="news-placeholder" data-role="status">搜索中...</div>' +
+                    '<ul class="news-list" data-role="list"></ul>' +
+                    '</div>';
+
+                var removeBtn = wrap.querySelector('[data-action="remove"]');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function() {
+                        try { wrap.remove(); } catch (e) {}
+                        _persistPanels();
+                    });
+                }
+
+                var refreshBtn = wrap.querySelector('[data-action="refresh"]');
+                var newDotBtn = wrap.querySelector('[data-action="newdot"]');
+
+                function _triggerPanelRefresh() {
+                    var q2 = wrap?.dataset?.query || '';
+                    var m2 = wrap?.dataset?.mode || 'hybrid';
+                    if (!q2) return;
+                    if (wrap?.dataset?.loading === '1') return;
+
+                    try {
+                        wrap.dataset.loading = '1';
+                    } catch (e) {
+                    }
+
+                    var oldText = refreshBtn ? refreshBtn.textContent : '';
+                    if (refreshBtn) {
+                        refreshBtn.textContent = '刷新中';
+                        try {
+                            refreshBtn.setAttribute('disabled', 'true');
+                        } catch (e) {
+                        }
+                    }
+
+                    if (newDotBtn) {
+                        try {
+                            newDotBtn.setAttribute('disabled', 'true');
+                        } catch (e) {
+                        }
+                    }
+
+                    var panelObj = {
+                        wrap: wrap,
+                        statusEl: wrap.querySelector('[data-role="status"]'),
+                        listEl: wrap.querySelector('[data-role="list"]'),
+                    };
+
+                    Promise.resolve(runSearchIntoPanel(q2, m2, panelObj, { clearList: false }))
+                        .finally(function() {
+                            try {
+                                wrap.dataset.loading = '0';
+                            } catch (e) {
+                            }
+                            if (refreshBtn) {
+                                refreshBtn.textContent = oldText;
+                                try {
+                                    refreshBtn.removeAttribute('disabled');
+                                } catch (e) {
+                                }
+                            }
+                            if (newDotBtn) {
+                                try {
+                                    newDotBtn.removeAttribute('disabled');
+                                } catch (e) {
+                                }
+                            }
+                        });
+                }
+
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', function() {
+                        _triggerPanelRefresh();
+                    });
+                }
+
+                if (newDotBtn) {
+                    newDotBtn.addEventListener('click', function() {
+                        _triggerPanelRefresh();
+                    });
+                }
+
+                try {
+                    panelsEl.prepend(wrap);
+                } catch (e) {
+                    panelsEl.appendChild(wrap);
+                }
+
+                _persistPanels();
+
+                return {
+                    wrap: wrap,
+                    statusEl: wrap.querySelector('[data-role="status"]'),
+                    listEl: wrap.querySelector('[data-role="list"]'),
+                };
+            }
+
+            async function runSearchIntoPanel(q, mode, panel, opts) {
+                opts = opts || {};
+                var clearList = opts.clearList !== false;
+                if (!panel) return;
+                var statusEl = panel.statusEl;
+                var listEl = panel.listEl;
+                if (statusEl) statusEl.textContent = clearList ? '搜索中...' : '刷新中...';
+                if (clearList && listEl) listEl.innerHTML = '';
+
+                var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=200';
+                try {
+                    var resp = await fetch(apiUrl, { method: 'GET' });
+                    var data = await resp.json();
+                    if (!resp.ok) {
+                        throw new Error((data && (data.detail || data.error)) || '请求失败');
+                    }
+
+                    var results = Array.isArray(data.results) ? data.results : [];
+                    if (statusEl) statusEl.textContent = '共 ' + results.length + ' 条结果';
+
+                    try {
+                        var key = _panelKey(q, mode);
+                        var urls = [];
+                        for (var i = 0; i < results.length; i++) {
+                            var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
+                            if (!u) continue;
+                            urls.push(u);
+                            if (urls.length >= MAX_SEEN_PER_PANEL) break;
+                        }
+                        _seenMap[key] = urls;
+                        _persistSeen();
+                        _setPanelHasNew(panel.wrap, false);
+                    } catch (e) {
+                    }
+
+                    if (!listEl) return;
+                    if (!results.length) {
+                        listEl.innerHTML = '<li class="news-placeholder">没有找到匹配结果</li>';
+                        return;
+                    }
+
+                    listEl.innerHTML = results.map(function(r) {
+                        var title = esc(r.title);
+                        var url = esc(r.url);
+                        var meta = esc((r.date || '') + ' · ' + (r.platform_id || ''));
+                        return (
+                            '<li class="news-item">' +
+                            '<div class="news-item-content">' +
+                            '<a class="news-title" href="' + url + '" target="_blank" rel="noopener noreferrer">' + title + '</a>' +
+                            '</div>' +
+                            '<div class="news-subtitle">' + meta + '</div>' +
+                            '</li>'
+                        );
+                    }).join('');
+                } catch (e) {
+                    if (statusEl) statusEl.textContent = '搜索失败：' + (e && e.message ? e.message : String(e));
+                }
+            }
+
+            async function _checkNewForPanel(panel) {
+                try {
+                    if (!panel || !panel.wrap) return;
+                    var wrap = panel.wrap;
+                    if (wrap?.dataset?.loading === '1') return;
+                    if (wrap?.dataset?.checking === '1') return;
+                    if (wrap?.dataset?.hasNew === '1') return;
+
+                    var q = String(wrap?.dataset?.query || '').trim();
+                    var mode = String(wrap?.dataset?.mode || 'hybrid').trim() || 'hybrid';
+                    if (!q) return;
+
+                    var key = _panelKey(q, mode);
+                    var seenArr = Array.isArray(_seenMap[key]) ? _seenMap[key] : [];
+                    var seen = new Set(seenArr);
+
+                    try {
+                        wrap.dataset.checking = '1';
+                    } catch (e0) {
+                    }
+
+                    var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=' + String(CHECK_LIMIT);
+                    var resp = await fetch(apiUrl, { method: 'GET' });
+                    var data = await resp.json();
+                    if (!resp.ok) return;
+
+                    var results = Array.isArray(data.results) ? data.results : [];
+                    for (var i = 0; i < results.length; i++) {
+                        var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
+                        if (!u) continue;
+                        if (!seen.has(u)) {
+                            _setPanelHasNew(wrap, true);
+                            break;
+                        }
+                    }
+                } catch (e) {
+                } finally {
+                    try {
+                        if (panel && panel.wrap) panel.wrap.dataset.checking = '0';
+                    } catch (e2) {
+                    }
+                }
+            }
+
+            function _setupNewHintLoop() {
+                var idx = 0;
+                window.setInterval(function() {
+                    try {
+                        if (!panelsEl) return;
+                        if (document.visibilityState !== 'visible') return;
+                        var children = Array.from(panelsEl.children || []);
+                        if (!children.length) return;
+                        var el = children[idx % children.length];
+                        idx++;
+                        if (!el) return;
+                        _checkNewForPanel({
+                            wrap: el,
+                            statusEl: el.querySelector('[data-role="status"]'),
+                            listEl: el.querySelector('[data-role="list"]'),
+                        });
+                    } catch (e) {
+                    }
+                }, CHECK_TICK_MS);
+
+                document.addEventListener('visibilitychange', function() {
+                    try {
+                        if (document.visibilityState !== 'visible') return;
+                        if (!panelsEl) return;
+                        var children = Array.from(panelsEl.children || []);
+                        for (var i = 0; i < Math.min(2, children.length); i++) {
+                            var el = children[i];
+                            if (!el) continue;
+                            _checkNewForPanel({
+                                wrap: el,
+                                statusEl: el.querySelector('[data-role="status"]'),
+                                listEl: el.querySelector('[data-role="list"]'),
+                            });
+                        }
+                    } catch (e) {
+                    }
+                });
+            }
+
+            function triggerSearch(opts) {
+                opts = opts || {};
+                var q = (opts.q != null ? String(opts.q) : (document.getElementById('searchQuery')?.value || '')).trim();
+                var mode = (opts.mode != null ? String(opts.mode) : (document.getElementById('searchMode')?.value || 'hybrid')).trim() || 'hybrid';
+                if (!q) return;
+
+                if (opts.updateUrl !== false) _updateUrl(q, mode);
+                var panel = null;
+                if (opts.reuseExisting) {
+                    panel = _findExistingPanel(q, mode);
+                    if (panel && panelsEl && panel.wrap && panelsEl.firstChild !== panel.wrap) {
+                        try { panelsEl.prepend(panel.wrap); } catch (e) {}
+                        _persistPanels();
+                    }
+                }
+                if (!panel) panel = createPanel(q, mode, { createdAt: opts.createdAt });
+                runSearchIntoPanel(q, mode, panel);
+            }
+
+            function restoreSavedPanels() {
+                if (!panelsEl) return;
+                var saved = _loadPanels();
+                if (!saved.length) return;
+                isRestoring = true;
+                try {
+                    for (var i = saved.length - 1; i >= 0; i--) {
+                        var it = saved[i] || {};
+                        var q = String(it.q || '').trim();
+                        var mode = String(it.mode || 'hybrid').trim() || 'hybrid';
+                        if (!q) continue;
+                        triggerSearch({ q: q, mode: mode, createdAt: it.createdAt, updateUrl: false });
+                    }
+                } finally {
+                    isRestoring = false;
+                    _persistPanels();
+                }
+            }
+
+            async function runSearchFromUrl() {
+                var params = getParams();
+                if (!params) return;
+
+                var q = (params.get('q') || '').trim();
+                var mode = (params.get('mode') || '{{ mode or "hybrid" }}').trim() || 'hybrid';
+
+                var input = document.getElementById('searchQuery');
+                if (input && q && !input.value) input.value = q;
+                if (!q) return;
+
+                triggerSearch({ q: q, mode: mode, updateUrl: false, reuseExisting: true });
+            }
+
+            var btn = document.getElementById('searchBtn');
+            if (btn) btn.addEventListener('click', function() { triggerSearch(); });
+
+            var clearBtn = document.getElementById('clearBtn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (!panelsEl) return;
+                    panelsEl.innerHTML = '';
+                    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                    try { localStorage.removeItem(SEEN_KEY); } catch (e) {}
+                    try { _seenMap = {}; } catch (e) {}
+                });
+            }
+
+            var input = document.getElementById('searchQuery');
+            if (input) {
+                input.addEventListener('keydown', function(ev) {
+                    if (ev && ev.key === 'Enter') {
+                        ev.preventDefault();
+                        triggerSearch();
+                    }
+                });
+                try { input.focus(); } catch (e) {}
+            }
+
+            restoreSavedPanels();
+            runSearchFromUrl();
+            _setupNewHintLoop();
+        })();
+    </script>
+</body>
+</html>

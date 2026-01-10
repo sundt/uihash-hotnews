@@ -9,7 +9,7 @@ function sh(cmd: string): string {
 
 function dockerExecPy(py: string): string {
   const b64 = Buffer.from(py, 'utf-8').toString('base64');
-  const cmd = `docker exec trend-radar-viewer python3 -c "import base64; exec(base64.b64decode('${b64}').decode('utf-8'))"`;
+  const cmd = `docker exec hotnews-viewer python3 -c "import base64; exec(base64.b64decode('${b64}').decode('utf-8'))"`;
   return sh(cmd);
 }
 

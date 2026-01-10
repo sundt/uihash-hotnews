@@ -1,4 +1,4 @@
 # coding=utf-8
 """
-TrendRadar 单元测试包
+Hotnews 单元测试包
 """

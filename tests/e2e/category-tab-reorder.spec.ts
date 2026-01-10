@@ -11,8 +11,8 @@ test.describe('Category Tab Reorder', () => {
 
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('__e2e_category_tab_reorder_cleared')) {
-        localStorage.removeItem('trendradar_categories_config');
-        localStorage.removeItem('trendradar_active_tab');
+        localStorage.removeItem('hotnews_categories_config');
+        localStorage.removeItem('hotnews_active_tab');
         sessionStorage.setItem('__e2e_category_tab_reorder_cleared', '1');
       }
     });

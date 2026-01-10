@@ -13,11 +13,11 @@ test.describe('RSS Catalog Preview', () => {
 
     await page.addInitScript(() => {
       localStorage.removeItem('rss_subscriptions');
-      localStorage.removeItem('trendradar_categories_config');
+      localStorage.removeItem('hotnews_categories_config');
       localStorage.removeItem('category_settings_badge_dismissed');
       localStorage.removeItem('rss_subscription_badge_dismissed');
-      localStorage.removeItem('trendradar_explore_seen_sources_v1');
-      localStorage.removeItem('trendradar_explore_last_source_v1');
+      localStorage.removeItem('hotnews_explore_seen_sources_v1');
+      localStorage.removeItem('hotnews_explore_last_source_v1');
     });
 
     await page.route('**/api/me/rss-subscriptions', async (route) => {

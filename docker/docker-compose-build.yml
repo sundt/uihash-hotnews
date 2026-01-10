@@ -1,5 +1,5 @@
 services:
-  trend-radar:
+  hotnews:
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -9,8 +9,8 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
-    image: wantcat/trendradar:${TREND_RADAR_TAG:-dev}
-    container_name: trend-radar
+    image: wantcat/hotnews:${HOTNEWS_TAG:-dev}
+    container_name: hotnews
     restart: unless-stopped
 
     ports:
@@ -62,12 +62,12 @@ services:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       # AI分类配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
-      - TREND_RADAR_MB_AI_ENABLED=${TREND_RADAR_MB_AI_ENABLED:-}
-      - TREND_RADAR_MB_AI_MODEL=${TREND_RADAR_MB_AI_MODEL:-qwen-plus}
-      - TREND_RADAR_MB_AI_TIMEOUT_S=${TREND_RADAR_MB_AI_TIMEOUT_S:-60}
-      - TREND_RADAR_MB_AI_ENDPOINT=${TREND_RADAR_MB_AI_ENDPOINT:-}
-      - TREND_RADAR_MB_AI_BATCH_SIZE=${TREND_RADAR_MB_AI_BATCH_SIZE:-20}
-      - TREND_RADAR_MB_AI_MAX_PER_HOUR=${TREND_RADAR_MB_AI_MAX_PER_HOUR:-200}
+      - HOTNEWS_MB_AI_ENABLED=${HOTNEWS_MB_AI_ENABLED:-}
+      - HOTNEWS_MB_AI_MODEL=${HOTNEWS_MB_AI_MODEL:-qwen-plus}
+      - HOTNEWS_MB_AI_TIMEOUT_S=${HOTNEWS_MB_AI_TIMEOUT_S:-60}
+      - HOTNEWS_MB_AI_ENDPOINT=${HOTNEWS_MB_AI_ENDPOINT:-}
+      - HOTNEWS_MB_AI_BATCH_SIZE=${HOTNEWS_MB_AI_BATCH_SIZE:-20}
+      - HOTNEWS_MB_AI_MAX_PER_HOUR=${HOTNEWS_MB_AI_MAX_PER_HOUR:-200}
       # 存储配置
       - STORAGE_BACKEND=${STORAGE_BACKEND:-auto}
       - LOCAL_RETENTION_DAYS=${LOCAL_RETENTION_DAYS:-0}
@@ -88,7 +88,7 @@ services:
       - RUN_MODE=${RUN_MODE:-cron}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
 
-  trend-radar-viewer:
+  hotnews-viewer:
     build:
       context: ..
       dockerfile: docker/Dockerfile.viewer
@@ -98,8 +98,8 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
-    image: wantcat/trendradar-viewer:${TREND_RADAR_VIEWER_TAG:?set TREND_RADAR_VIEWER_TAG}
-    container_name: trend-radar-viewer
+    image: wantcat/hotnews-viewer:${HOTNEWS_VIEWER_TAG:?set HOTNEWS_VIEWER_TAG}
+    container_name: hotnews-viewer
     restart: unless-stopped
 
     ports:
@@ -115,20 +115,20 @@ services:
       - VIEWER_HOST=0.0.0.0
       - VIEWER_PORT=${VIEWER_PORT:-8090}
       - VIEWER_WORKERS=${VIEWER_WORKERS:-2}
-      - TREND_RADAR_ADMIN_TOKEN=${TREND_RADAR_ADMIN_TOKEN:-}
-      - APP_VERSION=${TREND_RADAR_VIEWER_TAG}
+      - HOTNEWS_ADMIN_TOKEN=${HOTNEWS_ADMIN_TOKEN:-}
+      - APP_VERSION=${HOTNEWS_VIEWER_TAG}
       - CONFIG_REV=${CONFIG_REV:-}
       # Morning Brief AI filtering (DashScope / Qwen)
-      - TREND_RADAR_MB_AI_ENABLED=${TREND_RADAR_MB_AI_ENABLED:-}
+      - HOTNEWS_MB_AI_ENABLED=${HOTNEWS_MB_AI_ENABLED:-}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
-      - TREND_RADAR_MB_AI_MODEL=${TREND_RADAR_MB_AI_MODEL:-qwen-flash}
-      - TREND_RADAR_MB_AI_ENDPOINT=${TREND_RADAR_MB_AI_ENDPOINT:-}
-      - TREND_RADAR_MB_AI_TIMEOUT_S=${TREND_RADAR_MB_AI_TIMEOUT_S:-30}
-      - TREND_RADAR_MB_AI_BATCH_SIZE=${TREND_RADAR_MB_AI_BATCH_SIZE:-20}
-      - TREND_RADAR_MB_AI_MAX_PER_HOUR=${TREND_RADAR_MB_AI_MAX_PER_HOUR:-200}
-      - TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR=${TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR:-120}
+      - HOTNEWS_MB_AI_MODEL=${HOTNEWS_MB_AI_MODEL:-qwen-flash}
+      - HOTNEWS_MB_AI_ENDPOINT=${HOTNEWS_MB_AI_ENDPOINT:-}
+      - HOTNEWS_MB_AI_TIMEOUT_S=${HOTNEWS_MB_AI_TIMEOUT_S:-30}
+      - HOTNEWS_MB_AI_BATCH_SIZE=${HOTNEWS_MB_AI_BATCH_SIZE:-20}
+      - HOTNEWS_MB_AI_MAX_PER_HOUR=${HOTNEWS_MB_AI_MAX_PER_HOUR:-200}
+      - HOTNEWS_RSS_WARMUP_MAX_PER_HOUR=${HOTNEWS_RSS_WARMUP_MAX_PER_HOUR:-120}
       - SCRAPERAPI_KEY=${SCRAPERAPI_KEY:-}
-      - TREND_RADAR_SCRAPER_AI_MODEL=${TREND_RADAR_SCRAPER_AI_MODEL:-}
+      - HOTNEWS_SCRAPER_AI_MODEL=${HOTNEWS_SCRAPER_AI_MODEL:-}
 
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
@@ -136,7 +136,7 @@ services:
       timeout: 5s
       retries: 6
 
-  trend-radar-mcp:
+  hotnews-mcp:
     build:
       context: ..
       dockerfile: docker/Dockerfile.mcp
@@ -146,8 +146,8 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
-    image: wantcat/trendradar-mcp:${TREND_RADAR_MCP_TAG:-dev}
-    container_name: trend-radar-mcp
+    image: wantcat/hotnews-mcp:${HOTNEWS_MCP_TAG:-dev}
+    container_name: hotnews-mcp
     restart: unless-stopped
 
     ports:

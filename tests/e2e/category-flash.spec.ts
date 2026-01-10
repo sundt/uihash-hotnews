@@ -9,7 +9,7 @@ test.describe('Category Flash Prevention', () => {
     // Navigate first, then clear config
     await page.goto('/');
     await page.evaluate(() => {
-      localStorage.removeItem('trendradar_categories_config');
+      localStorage.removeItem('hotnews_categories_config');
     });
     await page.reload();
     await page.waitForLoadState('networkidle');
@@ -49,12 +49,12 @@ test.describe('Category Flash Prevention', () => {
   test('should not flash when refreshing with custom category order', async ({ page }) => {
     // Step 1: Set custom order in localStorage
     await page.evaluate(() => {
-      const config = JSON.parse(localStorage.getItem('trendradar_categories_config') || '{}');
+      const config = JSON.parse(localStorage.getItem('hotnews_categories_config') || '{}');
       const tabs = Array.from(document.querySelectorAll('.category-tab'));
       const order = tabs.map(tab => (tab as HTMLElement).dataset.category).filter(Boolean);
       // Reverse the order
       config.categoryOrder = order.reverse();
-      localStorage.setItem('trendradar_categories_config', JSON.stringify(config));
+      localStorage.setItem('hotnews_categories_config', JSON.stringify(config));
     });
 
     await page.reload();

@@ -85,7 +85,7 @@ class StorageSyncTools:
             return None
 
         try:
-            from trendradar.storage.remote import RemoteStorageBackend
+            from hotnews.storage.remote import RemoteStorageBackend
 
             remote_config = self._get_remote_config()
             config = self._load_config()
@@ -218,7 +218,7 @@ class StorageSyncTools:
             local_dates = set(self._get_local_dates())
 
             # 计算需要拉取的日期（最近 N 天）
-            from trendradar.utils.time import get_configured_time
+            from hotnews.utils.time import get_configured_time
             config = self._load_config()
             timezone = config.get("app", {}).get("timezone", "Asia/Shanghai")
             now = get_configured_time(timezone)

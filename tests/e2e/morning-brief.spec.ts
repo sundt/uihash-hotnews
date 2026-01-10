@@ -13,7 +13,7 @@ test.describe('Morning Brief Three Cards', () => {
     await page.addInitScript(() => {
       // Ensure the viewer uses the ajax refresh path so our route mocks are used consistently.
       localStorage.setItem(
-        'trendradar_categories_config',
+        'hotnews_categories_config',
         JSON.stringify({
           version: 1,
           customCategories: [],
@@ -24,7 +24,7 @@ test.describe('Morning Brief Three Cards', () => {
           categoryFilters: {},
         })
       );
-      localStorage.removeItem('trendradar_active_tab');
+      localStorage.removeItem('hotnews_active_tab');
     });
 
     // Mock base /api/news so the UI renders the knowledge tab.

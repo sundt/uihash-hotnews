@@ -18,7 +18,7 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
     viewerPage = new ViewerPage(page);
 
     await page.route('**/static/js/viewer.bundle.js*', async (route) => {
-      const bundlePath = path.resolve(__dirname, '../../trendradar/web/static/js/viewer.bundle.js');
+      const bundlePath = path.resolve(__dirname, '../../hotnews/web/static/js/viewer.bundle.js');
       const body = fs.readFileSync(bundlePath, 'utf-8');
       await route.fulfill({
         status: 200,
@@ -33,19 +33,19 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
       localStorage.setItem(marker, '1');
 
       localStorage.removeItem('rss_subscriptions');
-      localStorage.removeItem('trendradar_categories_config');
+      localStorage.removeItem('hotnews_categories_config');
       localStorage.removeItem('category_settings_badge_dismissed');
       localStorage.removeItem('rss_subscription_badge_dismissed');
-      localStorage.removeItem('trendradar_explore_seen_sources_v1');
-      localStorage.removeItem('trendradar_explore_last_source_v1');
-      localStorage.removeItem('trendradar_explore_tab_seen_sources_v1');
-      localStorage.removeItem('trendradar_explore_tab_cursor_v1');
-      localStorage.removeItem('trendradar_read_news_v2');
-      localStorage.removeItem('trendradar_show_read_mode');
+      localStorage.removeItem('hotnews_explore_seen_sources_v1');
+      localStorage.removeItem('hotnews_explore_last_source_v1');
+      localStorage.removeItem('hotnews_explore_tab_seen_sources_v1');
+      localStorage.removeItem('hotnews_explore_tab_cursor_v1');
+      localStorage.removeItem('hotnews_read_news_v2');
+      localStorage.removeItem('hotnews_show_read_mode');
 
       // Ensure Explore is NOT the initial active tab so the test can observe the
       // explore-cards request triggered on switching to Explore.
-      localStorage.setItem('trendradar_active_tab', 'general');
+      localStorage.setItem('hotnews_active_tab', 'general');
     });
   });
 
@@ -327,8 +327,8 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
       const li = a?.closest('.news-item') as HTMLElement | null;
       return {
         hasGlobalHandle: typeof (window as any).handleTitleClickV2,
-        hasTR: !!(window as any).TrendRadar,
-        hasReadState: !!(window as any).TrendRadar?.readState,
+        hasTR: !!(window as any).Hotnews,
+        hasReadState: !!(window as any).Hotnews?.readState,
         onclickAttr: a?.getAttribute('onclick') || '',
         liNewsId: li?.dataset?.newsId || '',
         liClass: li?.className || '',
@@ -343,7 +343,7 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
     const diagAfterClick = await page.evaluate(() => {
       const a = document.querySelector('#trExploreGrid a.news-title') as HTMLAnchorElement | null;
       const li = a?.closest('.news-item') as HTMLElement | null;
-      const raw = localStorage.getItem('trendradar_read_news_v2') || '';
+      const raw = localStorage.getItem('hotnews_read_news_v2') || '';
       return {
         liClass: li?.className || '',
         storageLen: raw.length,
@@ -356,7 +356,7 @@ test.describe('Explore Tab Embedded RSS Stream', () => {
       const a = document.querySelector('#trExploreGrid a.news-title') as HTMLAnchorElement | null;
       const li = a?.closest('.news-item') as HTMLElement | null;
       try {
-        (window as any).TrendRadar?.readState?.markItemAsRead?.(li);
+        (window as any).Hotnews?.readState?.markItemAsRead?.(li);
       } catch (e) {
         // ignore
       }

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from trendradar.web.rate_limit import (
+from hotnews.web.rate_limit import (
     is_rate_limited,
     check_rate_limit,
     reset_rate_limit_storage,

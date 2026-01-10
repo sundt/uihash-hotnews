@@ -13,7 +13,7 @@ Usage:
   bash docker/local-refresh-viewer.sh [--ingest]
 
 What it does:
-  - Build trend-radar-viewer image
+  - Build hotnews-viewer image
   - Restart viewer via docker compose up -d --force-recreate
   - Wait for /health
   - (Optional) run provider ingestion once inside the viewer container
@@ -67,11 +67,11 @@ if [ "${FORCE_CONFIG_REV:-}" = "1" ] && [ -z "${CONFIG_REV:-}" ]; then
   export CONFIG_REV
 fi
 
-echo "🧱 Building trend-radar-viewer..."
-$COMPOSE_CMD -f docker/docker-compose-build.yml build trend-radar-viewer
+echo "🧱 Building hotnews-viewer..."
+$COMPOSE_CMD -f docker/docker-compose-build.yml build hotnews-viewer
 
-echo "🔄 Recreating trend-radar-viewer (force-recreate)..."
-$COMPOSE_CMD -f docker/docker-compose-build.yml up -d --force-recreate trend-radar-viewer
+echo "🔄 Recreating hotnews-viewer (force-recreate)..."
+$COMPOSE_CMD -f docker/docker-compose-build.yml up -d --force-recreate hotnews-viewer
 
 echo "⏳ Waiting for /health ..."
 health_ok=false
@@ -89,8 +89,8 @@ if [ "$health_ok" != "true" ]; then
   echo "--- docker ps ---"
   docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | sed -n '1,12p' || true
   echo "--- viewer logs (tail) ---"
-  if docker ps --format '{{.Names}}' | grep -q '^trend-radar-viewer$'; then
-    docker logs --tail 200 trend-radar-viewer || true
+  if docker ps --format '{{.Names}}' | grep -q '^hotnews-viewer$'; then
+    docker logs --tail 200 hotnews-viewer || true
   fi
   exit 1
 fi
@@ -99,9 +99,9 @@ echo "✅ viewer healthy"
 
 if [ "$INGEST" = "true" ]; then
   echo "▶️  running provider ingestion once (inside viewer container)"
-  docker exec -i trend-radar-viewer sh -c "python - <<'PY'
+  docker exec -i hotnews-viewer sh -c "python - <<'PY'
 from datetime import datetime
-from trendradar.providers.runner import build_default_registry, run_provider_ingestion_once
+from hotnews.providers.runner import build_default_registry, run_provider_ingestion_once
 ok, metrics = run_provider_ingestion_once(
     registry=build_default_registry(),
     project_root='/app',

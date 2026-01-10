@@ -18,10 +18,10 @@ body:
 
         #### 1️⃣ **优先查看文档** 📚
         绝大部分配置问题在文档中都有详细说明，建议先查看相关章节：
-        - [🚀 快速开始](https://github.com/sansan0/TrendRadar#-快速开始)
-        - [📝 frequency_words.txt 配置](https://github.com/sansan0/TrendRadar#frequencywordstxt-配置教程)
-        - [🐳 Docker 部署指南](https://github.com/sansan0/TrendRadar#-docker-部署)
-        - [🤖 AI 分析配置](https://github.com/sansan0/TrendRadar#-ai-智能分析部署)
+        - [🚀 快速开始](https://github.com/sansan0/Hotnews#-快速开始)
+        - [📝 frequency_words.txt 配置](https://github.com/sansan0/Hotnews#frequencywordstxt-配置教程)
+        - [🐳 Docker 部署指南](https://github.com/sansan0/Hotnews#-docker-部署)
+        - [🤖 AI 分析配置](https://github.com/sansan0/Hotnews#-ai-智能分析部署)
 
         #### 2️⃣ **测试推送的常见误区** ⚠️
         测试消息推送时，请检查以下配置：
@@ -55,7 +55,7 @@ body:
         #### 4️⃣ **根据部署方式准备信息** 📦
 
         **如果你是 GitHub Actions 部署：**
-        1. **必须提供** Actions 工作流链接（格式：`https://github.com/你的用户名/TrendRadar/actions/workflows/crawler.yml`）
+        1. **必须提供** Actions 工作流链接（格式：`https://github.com/你的用户名/Hotnews/actions/workflows/crawler.yml`）
         2. **如何查看并截图执行日志：**
            ```
            步骤 1：打开你的仓库，点击顶部 "Actions" 标签

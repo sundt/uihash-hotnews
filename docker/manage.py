@@ -33,7 +33,7 @@ def manual_run():
     print("🔄 手动执行爬虫...")
     try:
         result = subprocess.run(
-            ["python", "-m", "trendradar"], cwd="/app", capture_output=False, text=True
+            ["python", "-m", "hotnews"], cwd="/app", capture_output=False, text=True
         )
         if result.returncode == 0:
             print("✅ 执行完成")
@@ -259,15 +259,15 @@ def show_status():
         if pid1_cmdline:
             print(f"    📋 当前 PID 1: {pid1_cmdline}")
         print("    💡 建议操作:")
-        print("       • 重启容器: docker restart trend-radar")
-        print("       • 检查容器日志: docker logs trend-radar")
+        print("       • 重启容器: docker restart hotnews")
+        print("       • 检查容器日志: docker logs hotnews")
 
     # 显示日志检查建议
     print("  📋 运行状态检查:")
-    print("    • 查看完整容器日志: docker logs trend-radar")
-    print("    • 查看实时日志: docker logs -f trend-radar")
+    print("    • 查看完整容器日志: docker logs hotnews")
+    print("    • 查看实时日志: docker logs -f hotnews")
     print("    • 手动执行测试: python manage.py run")
-    print("    • 重启容器服务: docker restart trend-radar")
+    print("    • 重启容器服务: docker restart hotnews")
 
 
 def show_config():
@@ -390,13 +390,13 @@ def show_logs():
                 subprocess.run(["tail", "-f", log_file], check=True)
                 break
         else:
-            print("📋 无法找到标准日志文件，建议使用: docker logs trend-radar")
+            print("📋 无法找到标准日志文件，建议使用: docker logs hotnews")
             
     except KeyboardInterrupt:
         print("\n👋 退出日志查看")
     except Exception as e:
         print(f"❌ 查看日志失败: {e}")
-        print("💡 建议使用: docker logs trend-radar")
+        print("💡 建议使用: docker logs hotnews")
 
 
 def restart_supercronic():
@@ -413,14 +413,14 @@ def restart_supercronic():
         if "supercronic" in pid1_cmdline.lower():
             print("  ✅ PID 1 是 supercronic")
             print("  💡 要重启 supercronic，需要重启整个容器:")
-            print("    docker restart trend-radar")
+            print("    docker restart hotnews")
         else:
             print("  ❌ PID 1 不是 supercronic，这是异常状态")
             print("  💡 建议重启容器以修复问题:")
-            print("    docker restart trend-radar")
+            print("    docker restart hotnews")
     except Exception as e:
         print(f"  ❌ 无法检查 PID 1: {e}")
-        print("  💡 建议重启容器: docker restart trend-radar")
+        print("  💡 建议重启容器: docker restart hotnews")
 
 
 def start_webserver():
@@ -559,7 +559,7 @@ def webserver_status():
 def show_help():
     """显示帮助信息"""
     help_text = """
-🐳 TrendRadar 容器管理工具
+🐳 Hotnews 容器管理工具
 
 📋 命令列表:
   run              - 手动执行一次爬虫
@@ -581,10 +581,10 @@ def show_help():
   python manage.py start_webserver
 
   # 在宿主机执行
-  docker exec -it trend-radar python manage.py run
-  docker exec -it trend-radar python manage.py status
-  docker exec -it trend-radar python manage.py start_webserver
-  docker logs trend-radar
+  docker exec -it hotnews python manage.py run
+  docker exec -it hotnews python manage.py status
+  docker exec -it hotnews python manage.py start_webserver
+  docker logs hotnews
 
 💡 常用操作指南:
   1. 检查运行状态: status
@@ -598,11 +598,11 @@ def show_help():
 
   3. 查看日志: logs
      - 实时监控运行情况
-     - 也可使用: docker logs trend-radar
+     - 也可使用: docker logs hotnews
 
   4. 重启服务: restart
      - 由于 supercronic 是 PID 1，需要重启整个容器
-     - 使用: docker restart trend-radar
+     - 使用: docker restart hotnews
 
   5. Web 服务器管理:
      - 启动: start_webserver

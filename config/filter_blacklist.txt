@@ -1,4 +1,4 @@
-# TrendRadar 内容过滤黑名单
+# Hotnews 内容过滤黑名单
 # Content Filter Blacklist
 #
 # 每行一个关键词，以 # 开头的行为注释

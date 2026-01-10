@@ -1,7 +1,7 @@
 {
-  "name": "trendradar-e2e-tests",
+  "name": "hotnews-e2e-tests",
   "version": "1.0.0",
-  "description": "E2E tests for TrendRadar News Viewer",
+  "description": "E2E tests for Hotnews News Viewer",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
@@ -10,8 +10,8 @@
     "test:report": "playwright show-report",
     "test:prod": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod",
     "test:prod:headed": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod --headed",
-    "build:js": "esbuild trendradar/web/static/js/src/index.js --bundle --outfile=trendradar/web/static/js/viewer.bundle.js --format=iife --minify",
-    "build:js:watch": "esbuild trendradar/web/static/js/src/index.js --bundle --outfile=trendradar/web/static/js/viewer.bundle.js --format=iife --watch"
+    "build:js": "esbuild hotnews/web/static/js/src/index.js --bundle --outfile=hotnews/web/static/js/viewer.bundle.js --format=iife --minify",
+    "build:js:watch": "esbuild hotnews/web/static/js/src/index.js --bundle --outfile=hotnews/web/static/js/viewer.bundle.js --format=iife --watch"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

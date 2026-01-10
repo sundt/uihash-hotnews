@@ -11,12 +11,12 @@ test.describe('Default RSS Category', () => {
       localStorage.removeItem('rss_subscriptions');
       localStorage.removeItem('category_settings_badge_dismissed');
       localStorage.removeItem('rss_subscription_badge_dismissed');
-      localStorage.removeItem('trendradar_explore_seen_sources_v1');
-      localStorage.removeItem('trendradar_explore_last_source_v1');
+      localStorage.removeItem('hotnews_explore_seen_sources_v1');
+      localStorage.removeItem('hotnews_explore_last_source_v1');
 
       // Force client refresh path so /api/news stubs are used.
       localStorage.setItem(
-        'trendradar_categories_config',
+        'hotnews_categories_config',
         JSON.stringify({
           version: 1,
           customCategories: [],

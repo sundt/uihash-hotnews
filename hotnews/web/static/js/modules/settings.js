@@ -1,0 +1,709 @@
+/**
+ * Hotnews Settings Module
+ * 栏目配置管理
+ */
+(function(global) {
+    'use strict';
+
+    const TR = global.Hotnews = global.Hotnews || {};
+    const storage = TR.storage;
+
+    const CATEGORY_CONFIG_KEY = 'hotnews_categories_config';
+    const CATEGORY_CONFIG_VERSION = 1;
+
+    let _defaultCategories = null;
+    let _allPlatforms = null;
+    let _editingCategoryId = null;
+    let _isAddingNew = false;
+    let _settingsHideDefaultCategories = false;
+    let _settingsCategoryListCollapsed = true;
+    let _settingsAllCategoriesOffSnapshot = null;
+    let _platformSearchQuery = '';
+    let _categoryConfigChanged = false;
+
+    TR.settings = {
+        getDefaultCategories: function() { return _defaultCategories; },
+        getAllPlatforms: function() { return _allPlatforms; },
+        setDefaultCategories: function(cats) { _defaultCategories = cats; },
+        setAllPlatforms: function(plats) { _allPlatforms = plats; },
+
+        getCategoryConfig: function() {
+            try {
+                const raw = storage.getRaw(CATEGORY_CONFIG_KEY);
+                if (!raw) return null;
+                const config = JSON.parse(raw);
+                if (config.version !== CATEGORY_CONFIG_VERSION) return null;
+                return TR.filter.normalizeCategoryConfig(config);
+            } catch (e) {
+                return null;
+            }
+        },
+
+        saveCategoryConfig: function(config) {
+            config.version = CATEGORY_CONFIG_VERSION;
+            storage.setRaw(CATEGORY_CONFIG_KEY, JSON.stringify(config));
+            
+            // 同步关键配置到 Cookie 供服务端使用
+            this.syncConfigToCookie(config);
+        },
+
+        syncConfigToCookie: function(config) {
+            try {
+                // 设置标记 Cookie（告诉服务端用户有自定义配置）
+                const maxAge = 365 * 24 * 60 * 60;
+                const hasCustom = (config.customCategories?.length > 0) || 
+                                  (config.hiddenDefaultCategories?.length > 0) || 
+                                  (config.categoryOrder?.length > 0);
+                
+                if (hasCustom) {
+                    document.cookie = `hotnews_has_config=1; path=/; max-age=${maxAge}; SameSite=Lax`;
+                } else {
+                    // 清除标记
+                    document.cookie = `hotnews_has_config=; path=/; max-age=0`;
+                }
+                
+                // 同步完整配置到 Cookie（控制大小 < 4KB）
+                const cookieData = {
+                    v: config.version || CATEGORY_CONFIG_VERSION,
+                    custom: (config.customCategories || []).map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        platforms: c.platforms || []
+                    })),
+                    hidden: config.hiddenDefaultCategories || [],
+                    order: config.categoryOrder || []
+                };
+                
+                const cookieValue = encodeURIComponent(JSON.stringify(cookieData));
+                
+                // 检查 Cookie 大小（< 4KB）
+                if (cookieValue.length > 4000) {
+                    console.warn('Category config too large for cookie, skipping sync');
+                    return;
+                }
+                
+                document.cookie = `hotnews_config=${cookieValue}; path=/; max-age=${maxAge}; SameSite=Lax`;
+            } catch (e) {
+                console.error('Failed to sync config to cookie:', e);
+            }
+        },
+
+        getDefaultCategoryConfig: function() {
+            if (!_defaultCategories) {
+                _defaultCategories = {};
+                _allPlatforms = {};
+                document.querySelectorAll('.category-tab').forEach(tab => {
+                    const catId = tab.dataset.category;
+                    const icon = tab.querySelector('.category-tab-icon')?.textContent?.trim() || '📁';
+                    const name = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '')?.trim() || catId;
+                    _defaultCategories[catId] = { id: catId, name, icon, isDefault: true };
+                });
+                document.querySelectorAll('.platform-card').forEach(card => {
+                    const platformId = card.dataset.platform;
+                    const platformName = card.querySelector('.platform-name')?.textContent?.trim()?.replace(/📱\s*/, '')?.split(' ')[0] || platformId;
+                    const tabPane = card.closest('.tab-pane');
+                    const catId = tabPane?.id?.replace('tab-', '') || 'other';
+                    _allPlatforms[platformId] = { id: platformId, name: platformName, defaultCategory: catId };
+                    if (_defaultCategories[catId]) {
+                        if (!_defaultCategories[catId].platforms) _defaultCategories[catId].platforms = [];
+                        _defaultCategories[catId].platforms.push(platformId);
+                    }
+                });
+            }
+            return {
+                version: CATEGORY_CONFIG_VERSION,
+                customCategories: [],
+                hiddenDefaultCategories: [],
+                categoryOrder: Object.keys(_defaultCategories),
+                platformOrder: {},
+                categoryFilters: {}
+            };
+        },
+
+        getMergedCategoryConfig: function() {
+            const defaultConfig = this.getDefaultCategoryConfig();
+            const userConfig = this.getCategoryConfig();
+            if (!userConfig) return defaultConfig;
+
+            const merged = {
+                ...defaultConfig,
+                customCategories: userConfig.customCategories || [],
+                hiddenDefaultCategories: userConfig.hiddenDefaultCategories || [],
+                categoryOrder: userConfig.categoryOrder || defaultConfig.categoryOrder,
+                platformOrder: userConfig.platformOrder || {},
+                categoryFilters: userConfig.categoryFilters || {}
+            };
+
+            Object.keys(_defaultCategories).forEach(catId => {
+                if (!merged.categoryOrder.includes(catId)) {
+                    merged.categoryOrder.push(catId);
+                }
+            });
+
+            merged.customCategories.forEach(cat => {
+                if (!merged.categoryOrder.includes(cat.id)) {
+                    merged.categoryOrder.push(cat.id);
+                }
+            });
+
+            return merged;
+        },
+
+        applyCategoryConfigToData: function(serverCategories) {
+            const merged = this.getMergedCategoryConfig();
+
+            if (!_defaultCategories) {
+                _defaultCategories = {};
+                _allPlatforms = {};
+                Object.entries(serverCategories).forEach(([catId, cat]) => {
+                    _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
+                    Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                        _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
+                    });
+                });
+            }
+
+            const allPlatformData = {};
+            Object.values(serverCategories).forEach(cat => {
+                Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                    allPlatformData[pid] = p;
+                });
+            });
+
+            const result = {};
+            const hiddenCategories = merged.hiddenDefaultCategories || [];
+            const categoryOrder = merged.categoryOrder || Object.keys(serverCategories);
+            const customCategories = merged.customCategories || [];
+            const platformOrder = merged.platformOrder || {};
+
+            categoryOrder.forEach(catId => {
+                if (hiddenCategories.includes(catId)) return;
+
+                const customCat = customCategories.find(c => c.id === catId);
+                if (customCat) {
+                    const platforms = {};
+                    (customCat.platforms || []).forEach(pid => {
+                        if (allPlatformData[pid]) {
+                            platforms[pid] = allPlatformData[pid];
+                        }
+                    });
+                    result[catId] = {
+                        name: customCat.name,
+                        icon: '📱',
+                        platforms: platforms
+                    };
+                } else if (serverCategories[catId]) {
+                    const serverCat = serverCategories[catId];
+                    const userPlatformOrder = platformOrder[catId];
+
+                    if (userPlatformOrder && userPlatformOrder.length > 0) {
+                        const platforms = {};
+                        userPlatformOrder.forEach(pid => {
+                            if (serverCat.platforms && serverCat.platforms[pid]) {
+                                platforms[pid] = serverCat.platforms[pid];
+                            }
+                        });
+                        Object.keys(serverCat.platforms || {}).forEach(pid => {
+                            if (!platforms[pid]) {
+                                platforms[pid] = serverCat.platforms[pid];
+                            }
+                        });
+                        result[catId] = { ...serverCat, platforms };
+                    } else {
+                        result[catId] = serverCat;
+                    }
+                }
+            });
+
+            Object.keys(serverCategories).forEach(catId => {
+                if (!result[catId] && !hiddenCategories.includes(catId)) {
+                    result[catId] = serverCategories[catId];
+                }
+            });
+
+            return result;
+        },
+
+        applyCategoryConfig: function() {
+            TR.data.refreshViewerData({ preserveScroll: false });
+        }
+    };
+
+    // === UI 函数 ===
+    function applyCategoryListCollapseState() {
+        const wrapper = document.getElementById('categoryListWrapper');
+        if (wrapper) {
+            if (_settingsCategoryListCollapsed) wrapper.classList.add('collapsed');
+            else wrapper.classList.remove('collapsed');
+        }
+        const btn = document.getElementById('categoryListToggleBtn');
+        if (btn) {
+            btn.textContent = _settingsCategoryListCollapsed ? '展开栏目列表' : '收起栏目列表';
+        }
+    }
+
+    function renderCategoryList() {
+        const container = document.getElementById('categoryList');
+        const config = TR.settings.getMergedCategoryConfig();
+
+        let html = '';
+        config.categoryOrder.forEach(catId => {
+            const isCustom = config.customCategories.find(c => c.id === catId);
+            const isHidden = config.hiddenDefaultCategories.includes(catId);
+
+            let cat;
+            if (isCustom) {
+                cat = isCustom;
+            } else if (_defaultCategories[catId]) {
+                cat = _defaultCategories[catId];
+            } else {
+                return;
+            }
+
+            const platformCount = isCustom ? (cat.platforms?.length || 0) : (_defaultCategories[catId]?.platforms?.length || 0);
+
+            html += `
+                <div class="category-item ${isCustom ? 'custom' : ''}" data-category-id="${catId}" draggable="true">
+                    <span class="category-item-drag">☰</span>
+                    <span class="category-item-name">${cat.name}</span>
+                    <span class="category-item-platforms">${platformCount} 个平台</span>
+                    <label class="category-item-toggle">
+                        <input type="checkbox" ${!isHidden ? 'checked' : ''} onchange="toggleCategoryVisibility('${catId}')">
+                        <span class="slider"></span>
+                    </label>
+                    <div class="category-item-actions">
+                        <button class="category-item-btn" onclick="editCategory('${catId}')">编辑</button>
+                        ${isCustom ? `<button class="category-item-btn delete" onclick="deleteCategory('${catId}')">删除</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+
+        const allOffEl = document.getElementById('allCategoriesOffToggle');
+        if (allOffEl) {
+            const hidden = config.hiddenDefaultCategories || [];
+            const allIds = config.categoryOrder || [];
+            allOffEl.checked = allIds.length > 0 && allIds.every(id => hidden.includes(id));
+        }
+
+        if (_settingsHideDefaultCategories) {
+            container.classList.add('hide-default');
+        } else {
+            container.classList.remove('hide-default');
+        }
+
+        setupCategoryDragAndDrop();
+    }
+
+    function setupCategoryDragAndDrop() {
+        const container = document.getElementById('categoryList');
+        const items = container.querySelectorAll('.category-item');
+
+        items.forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                saveCategoryOrder();
+            });
+
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const dragging = container.querySelector('.dragging');
+                if (dragging && dragging !== item) {
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        container.insertBefore(dragging, item);
+                    } else {
+                        container.insertBefore(dragging, item.nextSibling);
+                    }
+                }
+            });
+        });
+    }
+
+    function saveCategoryOrder() {
+        const container = document.getElementById('categoryList');
+        const items = container.querySelectorAll('.category-item');
+        const order = Array.from(items).map(item => item.dataset.categoryId);
+
+        const config = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+        config.categoryOrder = order;
+        TR.settings.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+    }
+
+    function hideEditPanel() {
+        document.getElementById('categoryEditPanel').classList.remove('show');
+        _editingCategoryId = null;
+        _isAddingNew = false;
+        const searchEl = document.getElementById('platformSearchInput');
+        if (searchEl) searchEl.value = '';
+        _platformSearchQuery = '';
+        _settingsHideDefaultCategories = false;
+    }
+
+    function renderPlatformSelectList(selectedPlatforms, isCustomCategory = false) {
+        const container = document.getElementById('platformSelectList');
+        const allPlatformIds = Object.keys(_allPlatforms);
+
+        const sortedPlatforms = [];
+        selectedPlatforms.forEach(pid => {
+            if (_allPlatforms[pid]) sortedPlatforms.push(pid);
+        });
+        allPlatformIds.forEach(pid => {
+            if (!sortedPlatforms.includes(pid)) sortedPlatforms.push(pid);
+        });
+
+        const query = (_platformSearchQuery || '').trim().toLowerCase();
+        const visiblePlatforms = query
+            ? sortedPlatforms.filter(pid => (_allPlatforms[pid]?.name || '').toLowerCase().includes(query))
+            : sortedPlatforms;
+
+        const disableDrag = query.length > 0;
+
+        container.innerHTML = visiblePlatforms.map(pid => {
+            const p = _allPlatforms[pid];
+            const isSelected = selectedPlatforms.includes(pid);
+            return `
+                <label class="platform-select-item ${isSelected ? 'selected' : ''} ${disableDrag ? 'no-drag' : ''}" data-platform-id="${pid}" draggable="${disableDrag ? 'false' : 'true'}">
+                    <span class="drag-handle">☰</span>
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="togglePlatformSelect('${pid}')">
+                    <span>${p.name}</span>
+                </label>
+            `;
+        }).join('');
+
+        if (!disableDrag) {
+            setupPlatformDragAndDrop();
+        }
+    }
+
+    function setupPlatformDragAndDrop() {
+        const container = document.getElementById('platformSelectList');
+        const items = container.querySelectorAll('.platform-select-item');
+
+        items.forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+            });
+
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const dragging = container.querySelector('.dragging');
+                if (dragging && dragging !== item) {
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        container.insertBefore(dragging, item);
+                    } else {
+                        container.insertBefore(dragging, item.nextSibling);
+                    }
+                }
+            });
+        });
+    }
+
+    function getSelectedPlatforms() {
+        const items = document.querySelectorAll('.platform-select-item');
+        const selected = [];
+        items.forEach(item => {
+            if (item.classList.contains('selected')) {
+                selected.push(item.dataset.platformId);
+            }
+        });
+        return selected;
+    }
+
+    // === 全局函数 ===
+    global.openCategorySettings = async function() {
+        if (!_defaultCategories || Object.keys(_defaultCategories).length === 0) {
+            try {
+                const response = await fetch('/api/news');
+                const data = await response.json();
+                if (data?.categories) {
+                    _defaultCategories = {};
+                    _allPlatforms = {};
+                    Object.entries(data.categories).forEach(([catId, cat]) => {
+                        _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
+                        Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                            _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
+                        });
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to fetch categories:', e);
+            }
+        }
+        const modal = document.getElementById('categorySettingsModal');
+        modal.classList.add('show');
+        _settingsCategoryListCollapsed = true;
+        _settingsAllCategoriesOffSnapshot = null;
+        hideEditPanel();
+        applyCategoryListCollapseState();
+        renderCategoryList();
+    };
+
+    global.closeCategorySettings = function() {
+        const modal = document.getElementById('categorySettingsModal');
+        modal.classList.remove('show');
+        if (_categoryConfigChanged) {
+            _categoryConfigChanged = false;
+            TR.settings.applyCategoryConfig();
+        }
+    };
+
+    global.saveCategorySettings = function() {
+        const editPanel = document.getElementById('categoryEditPanel');
+        const isEditing = editPanel && editPanel.classList.contains('show');
+        if (isEditing) {
+            const ok = saveCategory();
+            if (!ok) return;
+        }
+        closeCategorySettings();
+    };
+
+    global.cancelCategorySettings = function() {
+        _categoryConfigChanged = false;
+        const modal = document.getElementById('categorySettingsModal');
+        modal.classList.remove('show');
+    };
+
+    global.closeCategorySettingsOnOverlay = function(event) {
+        if (event.target === event.currentTarget) {
+            closeCategorySettings();
+        }
+    };
+
+    global.toggleCategoryListCollapseInSettings = function() {
+        _settingsCategoryListCollapsed = !_settingsCategoryListCollapsed;
+        applyCategoryListCollapseState();
+    };
+
+    global.toggleAllCategoriesOffInSettings = function(input) {
+        const allOff = !!(input && input.checked);
+        const config = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+        const merged = TR.settings.getMergedCategoryConfig();
+        const allIds = merged.categoryOrder || [];
+
+        if (allOff) {
+            if (_settingsAllCategoriesOffSnapshot === null) {
+                _settingsAllCategoriesOffSnapshot = (config.hiddenDefaultCategories || []).slice();
+            }
+            config.hiddenDefaultCategories = Array.from(new Set(allIds));
+        } else {
+            config.hiddenDefaultCategories = (_settingsAllCategoriesOffSnapshot || []).slice();
+            _settingsAllCategoriesOffSnapshot = null;
+        }
+
+        TR.settings.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        renderCategoryList();
+
+        _settingsCategoryListCollapsed = false;
+        applyCategoryListCollapseState();
+    };
+
+    global.toggleCategoryVisibility = function(catId) {
+        const config = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+        const idx = config.hiddenDefaultCategories.indexOf(catId);
+        if (idx >= 0) {
+            config.hiddenDefaultCategories.splice(idx, 1);
+        } else {
+            config.hiddenDefaultCategories.push(catId);
+        }
+        TR.settings.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        renderCategoryList();
+    };
+
+    global.showAddCategoryPanel = function() {
+        _isAddingNew = true;
+        _editingCategoryId = null;
+        _settingsCategoryListCollapsed = true;
+        applyCategoryListCollapseState();
+        _settingsHideDefaultCategories = true;
+
+        document.getElementById('editCategoryName').value = '';
+        const searchEl = document.getElementById('platformSearchInput');
+        if (searchEl) searchEl.value = '';
+        _platformSearchQuery = '';
+
+        renderPlatformSelectList([]);
+        TR.filter.setCategoryFilterEditorState('exclude', []);
+
+        document.getElementById('categoryEditPanel').classList.add('show');
+    };
+
+    global.editCategory = function(catId) {
+        _isAddingNew = false;
+        _editingCategoryId = catId;
+
+        const config = TR.settings.getMergedCategoryConfig();
+        const isCustom = config.customCategories.find(c => c.id === catId);
+
+        let cat, platforms;
+        if (isCustom) {
+            cat = isCustom;
+            platforms = cat.platforms || [];
+        } else {
+            cat = _defaultCategories[catId];
+            platforms = config.platformOrder[catId] || cat.platforms || [];
+        }
+
+        document.getElementById('editCategoryName').value = cat.name;
+        renderPlatformSelectList(platforms, isCustom);
+
+        const fc = TR.filter.getCategoryFilterConfig(catId);
+        TR.filter.setCategoryFilterEditorState(fc.mode, fc.keywords);
+
+        _settingsHideDefaultCategories = true;
+        _settingsCategoryListCollapsed = true;
+        applyCategoryListCollapseState();
+        const searchEl = document.getElementById('platformSearchInput');
+        if (searchEl) searchEl.value = '';
+        _platformSearchQuery = '';
+
+        document.getElementById('categoryEditPanel').classList.add('show');
+    };
+
+    global.cancelEditCategory = function() {
+        hideEditPanel();
+        renderCategoryList();
+    };
+
+    global.saveCategory = function() {
+        const name = document.getElementById('editCategoryName').value.trim();
+        const icon = '📱';
+        const platforms = getSelectedPlatforms();
+
+        if (!name) {
+            alert('请输入栏目名称');
+            return false;
+        }
+
+        if (platforms.length === 0) {
+            alert('请至少选择一个平台');
+            return false;
+        }
+
+        const config = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+        TR.filter.ensureCategoryFilters(config);
+
+        if (_isAddingNew) {
+            const newId = 'custom-' + Date.now();
+            config.customCategories.push({
+                id: newId,
+                name,
+                icon,
+                platforms,
+                isCustom: true
+            });
+            config.categoryOrder.unshift(newId);
+            config.categoryFilters[newId] = {
+                mode: TR.filter.getEditingMode(),
+                keywords: [...TR.filter.getEditingKeywords()]
+            };
+        } else if (_editingCategoryId) {
+            const customIdx = config.customCategories.findIndex(c => c.id === _editingCategoryId);
+            if (customIdx >= 0) {
+                config.customCategories[customIdx] = {
+                    ...config.customCategories[customIdx],
+                    name,
+                    icon,
+                    platforms
+                };
+            } else {
+                config.platformOrder[_editingCategoryId] = platforms;
+            }
+            config.categoryFilters[_editingCategoryId] = {
+                mode: TR.filter.getEditingMode(),
+                keywords: [...TR.filter.getEditingKeywords()]
+            };
+        }
+
+        TR.settings.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        hideEditPanel();
+        renderCategoryList();
+
+        _settingsCategoryListCollapsed = false;
+        applyCategoryListCollapseState();
+
+        return true;
+    };
+
+    global.deleteCategory = function(catId) {
+        if (!confirm('确定要删除这个自定义栏目吗？')) return;
+
+        const config = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+        config.customCategories = config.customCategories.filter(c => c.id !== catId);
+        config.categoryOrder = config.categoryOrder.filter(id => id !== catId);
+        delete config.platformOrder[catId];
+
+        TR.settings.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
+        renderCategoryList();
+    };
+
+    global.resetCategoryConfig = function() {
+        if (!confirm('确定要恢复默认栏目配置吗？所有自定义栏目将被删除。')) return;
+
+        storage.remove(CATEGORY_CONFIG_KEY);
+        _defaultCategories = null;
+        _allPlatforms = null;
+
+        renderCategoryList();
+        TR.settings.applyCategoryConfig();
+    };
+
+    global.togglePlatformSelect = function(platformId) {
+        const item = document.querySelector(`.platform-select-item[data-platform-id="${platformId}"]`);
+        if (item) {
+            item.classList.toggle('selected');
+        }
+    };
+
+    global.setPlatformSearchQuery = function(query) {
+        _platformSearchQuery = String(query || '');
+        const platforms = getSelectedPlatforms();
+        renderPlatformSelectList(platforms);
+    };
+
+    global.bulkSelectPlatforms = function(mode) {
+        const container = document.getElementById('platformSelectList');
+        if (!container) return;
+
+        const items = container.querySelectorAll('.platform-select-item');
+        items.forEach(item => {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (mode === 'all') {
+                item.classList.add('selected');
+                if (checkbox) checkbox.checked = true;
+            } else if (mode === 'none' || mode === 'clear') {
+                item.classList.remove('selected');
+                if (checkbox) checkbox.checked = false;
+            }
+        });
+    };
+
+    // 页面加载时同步现有配置到 Cookie
+    document.addEventListener('DOMContentLoaded', function() {
+        const existingConfig = TR.settings.getCategoryConfig();
+        if (existingConfig) {
+            TR.settings.syncConfigToCookie(existingConfig);
+        }
+    });
+
+})(window);

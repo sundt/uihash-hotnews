@@ -169,11 +169,11 @@ test.describe('News Viewer Page', () => {
 
         // 先应用一次分页窗口
         // @ts-ignore
-        window.TrendRadar.paging.applyPagingToCard(card, 0);
+        window.Hotnews.paging.applyPagingToCard(card, 0);
 
         // 再触发自动补全（但不应突破 20 的分页窗口上限）
         // @ts-ignore
-        window.TrendRadar.paging.autofillCard(card, { minVisible: 10, maxSteps: 5 });
+        window.Hotnews.paging.autofillCard(card, { minVisible: 10, maxSteps: 5 });
       });
 
       const card = viewerPage.platformCards.first();

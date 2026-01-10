@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'trendradar/web/**'
+      - 'hotnews/web/**'
       - 'tests/e2e/**'
       - 'playwright.config.ts'
       - 'package.json'
   pull_request:
     branches: [main]
     paths:
-      - 'trendradar/web/**'
+      - 'hotnews/web/**'
       - 'tests/e2e/**'
       - 'playwright.config.ts'
       - 'package.json'

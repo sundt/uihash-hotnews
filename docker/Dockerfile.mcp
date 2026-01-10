@@ -8,8 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制 MCP 服务器代码
 COPY mcp_server/ ./mcp_server/
-# 复制 trendradar 模块（MCP 服务需要读取 SQLite 数据）
-COPY trendradar/ ./trendradar/
+# 复制 hotnews 模块（MCP 服务需要读取 SQLite 数据）
+COPY hotnews/ ./hotnews/
 
 # 创建必要目录
 RUN mkdir -p /app/config /app/output

@@ -5,7 +5,7 @@ WORKDIR /app
 COPY docker/requirements.viewer.txt ./requirements.viewer.txt
 RUN pip install --no-cache-dir --retries 3 --timeout 60 -r requirements.viewer.txt
 
-COPY trendradar/ ./trendradar/
+COPY hotnews/ ./hotnews/
 COPY mcp_server/ ./mcp_server/
 
 RUN mkdir -p /app/config /app/output
@@ -18,4 +18,4 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8090
 
-CMD ["sh", "-c", "python -m uvicorn trendradar.web.server:app --host 0.0.0.0 --port ${VIEWER_PORT:-8090} --workers ${VIEWER_WORKERS:-2}"]
+CMD ["sh", "-c", "python -m uvicorn hotnews.web.server:app --host 0.0.0.0 --port ${VIEWER_PORT:-8090} --workers ${VIEWER_WORKERS:-2}"]

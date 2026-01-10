@@ -9,7 +9,7 @@ test.describe('Category Settings', () => {
     await viewerPage.goto();
     // Clear any existing custom config
     await page.evaluate(() => {
-      localStorage.removeItem('trendradar_categories_config');
+      localStorage.removeItem('hotnews_categories_config');
     });
     await page.reload();
     await page.waitForLoadState('networkidle');
