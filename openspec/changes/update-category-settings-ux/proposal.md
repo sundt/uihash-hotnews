@@ -24,7 +24,7 @@
 - Affected specs:
   - `viewer-categories`（仅 UX / UI 呈现层面调整，不改变需求语义）
 - Affected code:
-  - `trendradar/web/templates/viewer.html`（弹窗 HTML/CSS/JS）
+  - `hotnews/web/templates/viewer.html`（弹窗 HTML/CSS/JS）
   - `tests/e2e/category-settings.spec.ts`（可能需要更新选择器；补充 UX 相关 E2E 断言）
 
 ## Out of Scope

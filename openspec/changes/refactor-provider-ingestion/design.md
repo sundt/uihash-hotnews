@@ -1,6 +1,6 @@
 ## Context
-TrendRadar 现有抓取链路主要围绕 NewsNow 聚合源与 `DataFetcher` 组织。
-NBA 当前实现位于 `trendradar/web/server.py`，以 Web 请求触发抓取并注入 `sports` 分类；这不利于扩展更多“爬虫/外部源”，且抓取频率不可控。
+Hotnews 现有抓取链路主要围绕 NewsNow 聚合源与 `DataFetcher` 组织。
+NBA 当前实现位于 `hotnews/web/server.py`，以 Web 请求触发抓取并注入 `sports` 分类；这不利于扩展更多“爬虫/外部源”，且抓取频率不可控。
 
 财新等媒体站点只需要“标题 + 链接”，属于典型 RSS/HTML 列表抓取场景，适合定时落库。
 

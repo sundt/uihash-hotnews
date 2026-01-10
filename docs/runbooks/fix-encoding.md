@@ -16,7 +16,7 @@ FastAPI 的 `JSONResponse` 默认使用 `json.dumps()` 的默认参数，其中 
 
 ### 1. 创建自定义 JSONResponse 类
 
-在 `trendradar/web/server.py` 中添加自定义的 `UnicodeJSONResponse` 类：
+在 `hotnews/web/server.py` 中添加自定义的 `UnicodeJSONResponse` 类：
 
 ```python
 import json
@@ -51,7 +51,7 @@ return UnicodeJSONResponse(content=data)
 
 1. **重启 Web 服务器**：
    ```bash
-   python -m trendradar.web.server
+   python -m hotnews.web.server
    ```
 
 2. **测试 API**：
@@ -64,9 +64,9 @@ return UnicodeJSONResponse(content=data)
 
 ## 相关文件
 
-- `trendradar/web/server.py` - Web 服务器主文件
-- `trendradar/crawler/fetcher.py` - 数据获取器
-- `trendradar/web/templates/viewer.html` - Web 模板
+- `hotnews/web/server.py` - Web 服务器主文件
+- `hotnews/crawler/fetcher.py` - 数据获取器
+- `hotnews/web/templates/viewer.html` - Web 模板
 
 ## 修复日期
 

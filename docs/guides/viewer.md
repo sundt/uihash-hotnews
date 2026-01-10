@@ -2,7 +2,7 @@
 
 ## 📋 功能简介
 
-TrendRadar 新闻分类查看器是一个基于 Web 的新闻浏览界面，提供以下功能：
+Hotnews 新闻分类查看器是一个基于 Web 的新闻浏览界面，提供以下功能：
 
 - **🗂️ 智能分类**：按 4 大类型自动组织新闻（综合新闻、财经投资、社交娱乐、科技平台）
 - **🔍 内容过滤**：基于黑名单关键词自动过滤不感兴趣的内容
@@ -171,7 +171,7 @@ curl -X POST http://localhost:8080/api/blacklist/reload
 **解决**：
 ```bash
 # 运行爬虫
-uv run python -m trendradar
+uv run python -m hotnews
 ```
 
 ### 2. 过滤效果不符合预期

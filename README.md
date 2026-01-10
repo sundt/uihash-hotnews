@@ -1,9 +1,9 @@
 # Hotnews
 
  在线地址：https://hot.uihash.com
-![PC 端截图](trendradar/web/static/images/pc20260101.png)
+![PC 端截图](hotnews/web/static/images/pc20260101.png)
 
-![移动端截图](trendradar/web/static/images/mobile20260101.jpg)
+![移动端截图](hotnews/web/static/images/mobile20260101.jpg)
  
  面向“热点新闻 + RSS”聚合的轻量栈：
  
@@ -47,16 +47,17 @@
  
  ## 本地运行（Python）
  
- 依赖：Python >= 3.10，`uv`。
- 
- ```bash
- bash setup-mac.sh
- ```
- 
+依赖：Python >= 3.10，`uv`。
+
+```bash
+bash setup-mac.sh
+```
+
+
  抓取一次（写入 `output/YYYY-MM-DD/`）：
  
  ```bash
- uv run python -m trendradar
+ uv run python -m hotnews
  ```
  
  启动 Viewer（本地脚本 `./start-viewer.sh`，默认端口 `8080`，访问 `/viewer`）：

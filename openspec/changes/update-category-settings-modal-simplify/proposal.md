@@ -18,9 +18,9 @@
 - Affected specs:
   - `viewer-categories`（仅 UI/UX 简化，不改变功能语义与配置结构）
 - Affected code:
-  - `trendradar/web/templates/viewer.html`（弹窗标题与“一键开闭”区域）
-  - `trendradar/web/static/css/viewer.css`（弹窗 max-height / 布局）
-  - `trendradar/web/static/js/src/settings.js`（打开弹窗时默认折叠状态）
+  - `hotnews/web/templates/viewer.html`（弹窗标题与“一键开闭”区域）
+  - `hotnews/web/static/css/viewer.css`（弹窗 max-height / 布局）
+  - `hotnews/web/static/js/src/settings.js`（打开弹窗时默认折叠状态）
   - `tests/e2e/category-settings.spec.ts`（可能需要更新选择器/断言）
 
 ## Risks

@@ -1,6 +1,6 @@
 # MetaGPT 开发工具使用指南（Dev-Only）
 
-本项目将 MetaGPT 作为**开发期工具**使用：用于辅助生成原型/脚本/探索性代码，不进入线上 runtime，不进入 TrendRadar 生产镜像，不加入 `requirements.txt`。
+本项目将 MetaGPT 作为**开发期工具**使用：用于辅助生成原型/脚本/探索性代码，不进入线上 runtime，不进入 Hotnews 生产镜像，不加入 `requirements.txt`。
 
 ## 1. 前置条件
 
@@ -10,7 +10,7 @@
 
 ## 2. 安装（隔离环境）
 
-建议使用独立虚拟环境，避免污染 TrendRadar 运行依赖。
+建议使用独立虚拟环境，避免污染 Hotnews 运行依赖。
 
 ### 2.1 创建独立 venv（推荐）
 

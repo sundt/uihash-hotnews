@@ -10,7 +10,7 @@
 ## 3. Implementation
 - [ ] 3.1 Add provider base types + registry
 - [ ] 3.2 Add a site-ingestion provider (RSS-first, HTML fallback) for Caixin (title+link only)
-- [ ] 3.3 Migrate NBA ingestion from `trendradar/web/server.py` into provider layer
+- [ ] 3.3 Migrate NBA ingestion from `hotnews/web/server.py` into provider layer
 - [ ] 3.4 Implement periodic ingestion runner (cron/worker) and persist results
 - [ ] 3.5 Update viewer `/api/news` and page rendering to read from persisted results (no request-triggered crawling)
 - [ ] 3.6 Ensure fetch metrics are recorded consistently (`status`, `duration_ms`, `items_count`, `content_hash`, `changed_count` where applicable)

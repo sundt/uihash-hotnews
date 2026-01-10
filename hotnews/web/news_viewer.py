@@ -125,6 +125,12 @@ PLATFORM_CATEGORIES = {
         "platforms": [
             "nba-schedule",
         ],
+    },
+    "explore": {
+        "name": "深入探索",
+        "icon": "🧐",
+        "news_limit": 20,
+        "platforms": []
     }
 }
 

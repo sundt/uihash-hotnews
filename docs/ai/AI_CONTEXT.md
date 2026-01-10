@@ -9,14 +9,14 @@
 - `openspec/AGENTS.md`（当涉及 proposal/spec/架构调整时必须遵循）
 
 ## 项目目的（TL;DR）
-TrendRadar：多平台热点新闻聚合与 AI 分析工具（抓取、分类查看器、RSS、推送、MCP 分析）。
+Hotnews：多平台热点新闻聚合与 AI 分析工具（抓取、分类查看器、RSS、推送、MCP 分析）。
 
 ## 关键入口
-- Web Server：`trendradar/web/server.py`
+- Web Server：`hotnews/web/server.py`
 - 主配置：`config/config.yaml`（可被环境变量 `CONFIG_PATH` 覆盖）
-- 搜索配置：`trendradar/search/config.py`（环境变量 `TREND_RADAR_*`）
-- 前端模板：`trendradar/web/templates/`
-- 前端 JS（模块化源码）：`trendradar/web/static/js/src/`
+- 搜索配置：`hotnews/search/config.py`（环境变量 `HOTNEWS_*`）
+- 前端模板：`hotnews/web/templates/`
+- 前端 JS（模块化源码）：`hotnews/web/static/js/src/`
 
 ## 默认地址/端口（避免反复询问）
 
@@ -37,10 +37,10 @@ TrendRadar：多平台热点新闻聚合与 AI 分析工具（抓取、分类查
 - 搜索索引库：`output/search_indexes/fts_index.db`
 
 Schema/建表/迁移的权威来源（改表/加字段时必须同步更新对应位置）：
-- 热点新闻日库（news.db）：`trendradar/storage/schema.sql`（由 `trendradar/storage/local.py` / `trendradar/storage/remote.py` 执行）
-- RSS 在线库（online.db）：`trendradar/web/db_online.py`（含 `_ensure_column()` 的轻量加字段迁移）
-- 用户库（user.db）：`trendradar/web/user_db.py`
-- 搜索 FTS 索引库（fts_index.db）：`trendradar/search/fts_index.py`
+- 热点新闻日库（news.db）：`hotnews/storage/schema.sql`（由 `hotnews/storage/local.py` / `hotnews/storage/remote.py` 执行）
+- RSS 在线库（online.db）：`hotnews/web/db_online.py`（含 `_ensure_column()` 的轻量加字段迁移）
+- 用户库（user.db）：`hotnews/web/user_db.py`
+- 搜索 FTS 索引库（fts_index.db）：`hotnews/search/fts_index.py`
 
 ## 工作方式（最低要求）
 - 进行较大改动/新增能力/规范调整前：先走 OpenSpec（见 `openspec/AGENTS.md`）。

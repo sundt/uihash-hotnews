@@ -90,16 +90,16 @@
 
 ```bash
 # 启用AI分类
-export TREND_RADAR_MB_AI_ENABLED=1
+export HOTNEWS_MB_AI_ENABLED=1
 
 # DashScope API密钥
 export DASHSCOPE_API_KEY=your_api_key_here
 
 # 可选配置
-export TREND_RADAR_MB_AI_MODEL=qwen-plus  # 默认qwen-plus
-export TREND_RADAR_MB_AI_BATCH_SIZE=20    # 每批处理数量
-export TREND_RADAR_MB_AI_MAX_PER_HOUR=200 # 每小时最大请求数
-export TREND_RADAR_MB_AI_TIMEOUT_S=30     # 超时时间（秒）
+export HOTNEWS_MB_AI_MODEL=qwen-plus  # 默认qwen-plus
+export HOTNEWS_MB_AI_BATCH_SIZE=20    # 每批处理数量
+export HOTNEWS_MB_AI_MAX_PER_HOUR=200 # 每小时最大请求数
+export HOTNEWS_MB_AI_TIMEOUT_S=30     # 超时时间（秒）
 ```
 
 ### 2. 运行测试
@@ -176,7 +176,7 @@ curl -X POST http://127.0.0.1:8090/api/rss/ai-classification/test \
 ### 查看分类质量
 
 ```python
-from trendradar.web.rss_scheduler import mb_ai_get_classification_stats
+from hotnews.web.rss_scheduler import mb_ai_get_classification_stats
 
 # 获取最近24小时统计
 stats = mb_ai_get_classification_stats(last_n_hours=24)
@@ -212,7 +212,7 @@ print(f"平均分数: {stats['include_stats']['avg_score']}")
 ### AI分类未运行
 ```bash
 # 检查环境变量
-echo $TREND_RADAR_MB_AI_ENABLED
+echo $HOTNEWS_MB_AI_ENABLED
 echo $DASHSCOPE_API_KEY
 
 # 检查日志
@@ -251,4 +251,4 @@ tail -f logs/viewer.log | grep "mb_ai"
 - [AI 状态检查](../runbooks/ai-status.md)
 - [主 README](../../README.md)
 - [测试脚本](../../test_ai_classification.py)
-- [源码：rss_scheduler.py](../../trendradar/web/rss_scheduler.py)
+- [源码：rss_scheduler.py](../../hotnews/web/rss_scheduler.py)

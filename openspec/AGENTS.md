@@ -74,7 +74,7 @@ Track these steps as TODOs and complete them one by one.
 #### Test Workflow
 ```bash
 # 1. Ensure Docker container is running
-docker ps | grep trend-radar-viewer || bash docker/local-refresh-viewer.sh
+docker ps | grep hotnews-viewer || bash docker/local-refresh-viewer.sh
 
 # 2. Run all E2E tests
 npm test
@@ -279,7 +279,7 @@ Create `design.md` if any of the following apply; otherwise omit it:
 - Ambiguity that benefits from technical decisions before coding
 
 Practical triggers (less subjective): create `design.md` if any are true:
-- The change spans 2+ top-level areas (e.g. both `trendradar/` and `docker/`, or backend + frontend)
+- The change spans 2+ top-level areas (e.g. both `hotnews/` and `docker/`, or backend + frontend)
 - You need to choose between multiple implementation approaches with meaningful trade-offs
 - There is a migration/rollback plan beyond “revert commit” (schema/config/backfills)
 - You introduce a new API contract, storage format, or background job

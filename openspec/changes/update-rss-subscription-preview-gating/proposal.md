@@ -41,8 +41,8 @@
   - `viewer-rss-subscriptions`
 
 - Affected code:
-  - `trendradar/web/static/js/src/subscription.js`
-  - `trendradar/web/templates/_viewer_modals.html`（如需补充灰态/提示区域）
+  - `hotnews/web/static/js/src/subscription.js`
+  - `hotnews/web/templates/_viewer_modals.html`（如需补充灰态/提示区域）
   - `tests/e2e/rss-subscriptions.spec.ts`
 
 ## Non-Goals

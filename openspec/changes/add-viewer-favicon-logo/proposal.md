@@ -12,6 +12,6 @@ The site currently does not explicitly set a favicon/apple-touch-icon, so in bro
 - Affected specs:
   - deployment
 - Affected code:
-  - `trendradar/web/templates/viewer.html`
+  - `hotnews/web/templates/viewer.html`
 - Affected assets:
-  - `trendradar/web/static/images/hxlogo.jpg` (already present)
+  - `hotnews/web/static/images/hxlogo.jpg` (already present)

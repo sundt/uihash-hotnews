@@ -13,13 +13,13 @@
 
 ## 1.2 Viewer 自动重启规则（避免手动操作）
 
-由于 `trend-radar-viewer` 容器未挂载源码目录（只挂载 `config/` 和 `output/`），因此改动代码/静态资源后不会自动生效。
+由于 `hotnews-viewer` 容器未挂载源码目录（只挂载 `config/` 和 `output/`），因此改动代码/静态资源后不会自动生效。
 当修改以下文件类型/路径时，AI 必须自动触发 viewer 重建与重启（而不是让用户手动重启）：
 
-- `trendradar/web/static/**/*.css`（CSS）
-- `trendradar/web/static/**/*.js`（JS，包含 `viewer.js` / `viewer.bundle.js`）
-- `trendradar/web/templates/**/*.html`（模板/Jinja2）
-- `trendradar/web/**/*.py`（viewer 后端路由/服务代码）
+- `hotnews/web/static/**/*.css`（CSS）
+- `hotnews/web/static/**/*.js`（JS，包含 `viewer.js` / `viewer.bundle.js`）
+- `hotnews/web/templates/**/*.html`（模板/Jinja2）
+- `hotnews/web/**/*.py`（viewer 后端路由/服务代码）
 - `docker/Dockerfile.viewer`、`docker/docker-compose-build.yml`（镜像/compose 变更）
 
 自动重启方式（按环境选择其一）：
@@ -38,10 +38,10 @@
 
 当你要增加表/字段/索引时，至少要检查并同步：
 
-- **news.db（日库）**：更新 `trendradar/storage/schema.sql`（并确认 `trendradar/storage/local.py` / `trendradar/storage/remote.py` 使用该 schema 初始化）。
-- **online.db（RSS）**：更新 `trendradar/web/db_online.py` 的建表 SQL；如需兼容旧库，加 `_ensure_column(...)`（仅适合 ADD COLUMN 这类简单迁移）。
-- **user.db**：更新 `trendradar/web/user_db.py` 的建表 SQL；如需兼容旧库，建议采用“新增列/新表”的方式，避免复杂迁移。
-- **fts_index.db（搜索索引）**：更新 `trendradar/search/fts_index.py` 的 FTS 虚拟表定义（必要时需要重建索引）。
+- **news.db（日库）**：更新 `hotnews/storage/schema.sql`（并确认 `hotnews/storage/local.py` / `hotnews/storage/remote.py` 使用该 schema 初始化）。
+- **online.db（RSS）**：更新 `hotnews/web/db_online.py` 的建表 SQL；如需兼容旧库，加 `_ensure_column(...)`（仅适合 ADD COLUMN 这类简单迁移）。
+- **user.db**：更新 `hotnews/web/user_db.py` 的建表 SQL；如需兼容旧库，建议采用“新增列/新表”的方式，避免复杂迁移。
+- **fts_index.db（搜索索引）**：更新 `hotnews/search/fts_index.py` 的 FTS 虚拟表定义（必要时需要重建索引）。
 
 一般不需要也不建议提交 `.db` 文件；用初始化/迁移代码保证旧库可升级。
 
@@ -77,6 +77,6 @@
 - 对关键决策建议在 `docs/ai/AI_CONTEXT.md` 的“最近变更”里追加一条。
 
 ## 7. 快速定位
-- 配置加载：`trendradar/core/loader.py`（默认 `config/config.yaml`）
+- 配置加载：`hotnews/core/loader.py`（默认 `config/config.yaml`）
 - Viewer 指南：`docs/guides/viewer.md`
 - RSS AI 分类：`docs/guides/rss-ai-classification.md`

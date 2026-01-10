@@ -22,8 +22,8 @@ A source is considered **abnormal** if it matches any of:
 ## Impact
 - Affected specs: admin-rss-sources
 - Affected code:
-  - `trendradar/web/rss_admin.py`
-  - `trendradar/web/templates/admin_rss_sources.html`
+  - `hotnews/web/rss_admin.py`
+  - `hotnews/web/templates/admin_rss_sources.html`
   - (optional) E2E tests for the admin page
 
 ## Verification

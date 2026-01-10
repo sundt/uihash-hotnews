@@ -7,7 +7,7 @@
 - **User**: root
 - **SSH Port**: 52222
 - **Project Path**: ~/hotnews
-- **SSH Config Alias**: (optional) `trendradar-prod`
+- **SSH Config Alias**: (optional) `hotnews-prod`
 
 ### Deployment Method
 - **Primary**: Git pull + service restart
@@ -16,12 +16,12 @@
 ### Service Management
 ```bash
 # Check service status
-systemctl status trendradar  # if using systemd
+systemctl status hotnews  # if using systemd
 # or
 docker-compose ps            # if using docker
 
 # View logs
-journalctl -u trendradar -f  # systemd
+journalctl -u hotnews -f  # systemd
 docker-compose logs -f       # docker
 tail -f ~/hotnews/logs/*.log # direct python
 ```
@@ -30,21 +30,21 @@ tail -f ~/hotnews/logs/*.log # direct python
 
 #### Git-based Deployment (Recommended)
 ```bash
-ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git pull && systemctl restart trendradar'
+ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git pull && systemctl restart hotnews'
 ```
 
 #### Docker Deployment
 ```bash
-ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git pull && cd docker && docker-compose restart trend-radar'
+ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git pull && cd docker && docker-compose restart hotnews'
 ```
 
 #### Direct File Sync (Hot Fix Only)
 ```bash
 # Sync single file
-rsync -avz -e "ssh -p 52222" trendradar/web/server.py root@120.77.222.205:~/hotnews/trendradar/web/
+rsync -avz -e "ssh -p 52222" hotnews/web/server.py root@120.77.222.205:~/hotnews/hotnews/web/
 
 # Restart service
-ssh -p 52222 root@120.77.222.205 'systemctl restart trendradar'
+ssh -p 52222 root@120.77.222.205 'systemctl restart hotnews'
 ```
 
 ## Testing Endpoints
@@ -65,7 +65,7 @@ open http://120.77.222.205:8080/viewer
 
 If deployment fails:
 ```bash
-ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git reset --hard HEAD~1 && systemctl restart trendradar'
+ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git reset --hard HEAD~1 && systemctl restart hotnews'
 ```
 
 ## Emergency Restore (Offline Image Tarball)
@@ -89,8 +89,8 @@ gzip -dc V1.0.1.tar.gz | ssh -p 52222 root@120.77.222.205 "docker load"
 
 ```bash
 ssh -p 52222 root@120.77.222.205 "cd ~/hotnews/docker && \
-printf 'TREND_RADAR_TAG=v1.0.1\nTREND_RADAR_MCP_TAG=v1.0.1\nTREND_RADAR_VIEWER_TAG=v1.0.1\nVIEWER_PORT=8090\n' > .env && \
-docker compose up -d trend-radar trend-radar-mcp trend-radar-viewer"
+printf 'HOTNEWS_TAG=v1.0.1\nHOTNEWS_MCP_TAG=v1.0.1\nHOTNEWS_VIEWER_TAG=v1.0.1\nVIEWER_PORT=8090\n' > .env && \
+docker compose up -d hotnews hotnews-mcp hotnews-viewer"
 ```
 
 3) Verify:

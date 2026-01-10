@@ -13,7 +13,7 @@
 - [ ] 3.2 `git pull origin main`，若无新提交则退出
 - [ ] 3.3 `docker compose -f docker-compose-build.yml build ...` + `up -d --force-recreate ...`
 - [ ] 3.4 健康检查：`curl -fsS http://127.0.0.1:8090/health && echo`
-- [ ] 3.5 容器检查：`docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep trend-radar`
+- [ ] 3.5 容器检查：`docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep hotnews`
 
 ## 4. Implement Rollback on Failure
 - [ ] 4.1 任何远端步骤失败：`git reset --hard $old_head`，然后重新 build/up

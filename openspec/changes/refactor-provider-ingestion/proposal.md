@@ -1,7 +1,7 @@
 # Change: 统一可扩展的 Provider 抓取接入层（支持 NBA 迁移与财新等站点抓取）
 
 ## Why
-当前新增的数据源（例如 NBA）以“在 `trendradar/web/server.py` 内请求触发抓取 + 注入分类”的方式接入。
+当前新增的数据源（例如 NBA）以“在 `hotnews/web/server.py` 内请求触发抓取 + 注入分类”的方式接入。
 这种方式会导致：
 - 抓取逻辑散落在 Web 层，职责混杂，长期难维护。
 - 抓取频率不可控（页面刷新/多人访问会触发抓取），容易被限流，且增加接口延迟。
@@ -11,7 +11,7 @@
 
 ## What Changes
 - 引入统一的 **Provider 接入层**（插件化）：
-  - 每个 Provider 负责从某个外部源抓取并输出 TrendRadar 统一新闻结构（title/url/timestamp/rank）。
+  - 每个 Provider 负责从某个外部源抓取并输出 Hotnews 统一新闻结构（title/url/timestamp/rank）。
   - Provider 统一产生抓取 metrics，并与现有 `/api/fetch-metrics` 语义保持一致。
 - 将 NBA 抓取从 `web/server.py` 迁移为 Provider（不再由 Web 请求触发），并通过定时任务落库。
 - 新增一个“站点类（RSS/HTML）” Provider，用于接入财新等只需标题+链接的平台：
@@ -24,8 +24,8 @@
   - `specs/sports-game-data/spec.md`（NBA 等结构化数据源迁移到 Provider）
   - `specs/news-viewer/spec.md`（viewer 数据加载链路：从请求触发抓取调整为读取落库结果）
 - Affected code (expected):
-  - `trendradar/crawler/`（新增 provider 抽象/注册表/调度入口）
-  - `trendradar/web/server.py`（移除 NBA 的请求触发抓取路径，改为读取落库结果）
+  - `hotnews/crawler/`（新增 provider 抽象/注册表/调度入口）
+  - `hotnews/web/server.py`（移除 NBA 的请求触发抓取路径，改为读取落库结果）
   - `config/config.yaml`
 
 ## Scope (Confirmed)

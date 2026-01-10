@@ -15,8 +15,8 @@ The current `/api/fetch-metrics` endpoint can report whether a fetch is `success
 - Affected specs:
   - `news-viewer`
 - Affected code:
-  - `trendradar/crawler/fetcher.py` (derive content key list/hash from upstream response)
-  - `trendradar/web/server.py` (persist last snapshot per platform and compute `changed_count`; include fields in response)
+  - `hotnews/crawler/fetcher.py` (derive content key list/hash from upstream response)
+  - `hotnews/web/server.py` (persist last snapshot per platform and compute `changed_count`; include fields in response)
 - Backwards compatibility:
   - Existing fields remain unchanged.
   - New fields are additive and optional for clients.

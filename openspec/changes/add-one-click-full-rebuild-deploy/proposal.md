@@ -15,7 +15,7 @@
   - 本地：展示 `git status` / `git diff --stat` / 可选 `git diff`，然后执行 `git add .` + 交互输入 commit message 并 `git commit`
   - 本地：push `origin main` 与 `gitee main`
   - 远端：`cd ~/hotnews && git pull origin main`
-  - 远端：`cd docker && docker compose -f docker-compose-build.yml build trend-radar trend-radar-viewer trend-radar-mcp` + `up -d --force-recreate ...`
+  - 远端：`cd docker && docker compose -f docker-compose-build.yml build hotnews hotnews-viewer hotnews-mcp` + `up -d --force-recreate ...`
   - 远端：失败则回滚到部署前 commit 并重新 build/up
   - 远端：成功则执行健康检查与 `docker ps` 校验
 - 不删除现有脚本（`deploy-smart.sh`/`hotfix-viewer.sh`/`rsync-sync.sh`/`sync-to-server.sh`），先并行保留，待新脚本稳定后再决定是否移除。

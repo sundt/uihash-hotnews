@@ -25,10 +25,8 @@ viewer:
   cdn_base_url: ""
 
   new_badges:
-    categories:
-      - "finance"
-    platforms:
-      - "caixin"
+    categories: []
+    platforms: []
   # 自动刷新
   auto_refresh: true
   refresh_interval: 600  # 刷新间隔（秒）

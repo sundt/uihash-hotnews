@@ -1,13 +1,13 @@
 # Change: 引入真实 NBA 排行与游戏排行数据源（非 NewsNow 聚合）
 
 ## Why
-当前 TrendRadar 的抓取链路依赖 NewsNow 聚合 API（`newsnow.busiyi.world/api/s?id=...`），这类源偏“热点/热榜/聚合”，并不能覆盖你需要的 **真实 NBA 赛事/排名** 与 **真实游戏平台排行**（例如 Steam 热销榜/热门榜/在线榜等）。
+当前 Hotnews 的抓取链路依赖 NewsNow 聚合 API（`newsnow.busiyi.world/api/s?id=...`），这类源偏“热点/热榜/聚合”，并不能覆盖你需要的 **真实 NBA 赛事/排名** 与 **真实游戏平台排行**（例如 Steam 热销榜/热门榜/在线榜等）。
 
 为了满足“真实 + 可持续抓取”的需求，需要新增一条独立于 NewsNow 的数据源通道，并将其纳入现有存储与 viewer 展示链路。
 
 ## What Changes
-- 新增 **Sports 数据源适配器**：抓取 NBA **当日赛程 + 比分（scoreboard）**，并转换为 TrendRadar 统一新闻结构
-- 新增 **Game 排行数据源适配器**：抓取 Steam **New & Trending（新作热度）** 榜单，并转换为 TrendRadar 统一新闻结构
+- 新增 **Sports 数据源适配器**：抓取 NBA **当日赛程 + 比分（scoreboard）**，并转换为 Hotnews 统一新闻结构
+- 新增 **Game 排行数据源适配器**：抓取 Steam **New & Trending（新作热度）** 榜单，并转换为 Hotnews 统一新闻结构
 - 在 `config/config.yaml` 提供配置项选择数据提供方、抓取频率、区域/语言、API Key（如需要）
 - 失败时降级：不影响现有 NewsNow 平台抓取；新增源失败只标记为失败平台
 
@@ -40,8 +40,8 @@
 - Affected specs:
   - `specs/sports-game-data/spec.md`（新增 capability：体育/游戏数据源）
 - Affected code (expected):
-  - `trendradar/crawler/`（新增 provider fetcher + adapter）
-  - `trendradar/web/server.py`（viewer auto_fetch 时纳入新源）
+  - `hotnews/crawler/`（新增 provider fetcher + adapter）
+  - `hotnews/web/server.py`（viewer auto_fetch 时纳入新源）
   - `config/config.yaml`（新增配置项）
 
 ## Scope (Confirmed)

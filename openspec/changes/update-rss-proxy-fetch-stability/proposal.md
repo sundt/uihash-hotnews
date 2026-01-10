@@ -28,7 +28,7 @@ RSS 订阅的预览与抓取依赖服务器侧 RSS proxy fetch（例如 `rss_pro
 - Affected specs:
   - `rss-proxy-resilience`
 - Affected code:
-  - `trendradar/web/rss_proxy.py`
+  - `hotnews/web/rss_proxy.py`
 
 ## Non-Goals
 

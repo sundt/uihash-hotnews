@@ -71,7 +71,7 @@ curl -s http://127.0.0.1:8080/api/rss/ai-classification/stats?hours=1 | jq
 ### ✅ 正在运行的标志
 
 1. **环境变量**: 
-   - `TREND_RADAR_MB_AI_ENABLED=1`
+   - `HOTNEWS_MB_AI_ENABLED=1`
    - `DASHSCOPE_API_KEY` 已设置
 
 2. **数据库**:
@@ -85,7 +85,7 @@ curl -s http://127.0.0.1:8080/api/rss/ai-classification/stats?hours=1 | jq
 ### ❌ 未运行的标志
 
 1. **环境变量**:
-   - `TREND_RADAR_MB_AI_ENABLED` 未设置或为0
+   - `HOTNEWS_MB_AI_ENABLED` 未设置或为0
    - 缺少 `DASHSCOPE_API_KEY`
 
 2. **数据库**:
@@ -101,7 +101,7 @@ curl -s http://127.0.0.1:8080/api/rss/ai-classification/stats?hours=1 | jq
 可能原因：
 1. **刚启动服务** - 等待5-10分钟
 2. **无新RSS数据** - 检查RSS抓取是否正常
-3. **超过配额** - 查看 `TREND_RADAR_MB_AI_MAX_PER_HOUR`
+3. **超过配额** - 查看 `HOTNEWS_MB_AI_MAX_PER_HOUR`
 4. **API错误** - 检查密钥是否有效
 
 ## 🔧 故障排查

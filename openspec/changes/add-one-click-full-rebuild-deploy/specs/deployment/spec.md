@@ -17,8 +17,8 @@
 #### Scenario: 服务器端 pull + 三服务全量重建
 - **WHEN** push 完成
 - **THEN** 脚本必须在服务器执行 `git pull origin main`
-- **AND THEN** 脚本必须执行 `docker compose -f docker-compose-build.yml build trend-radar trend-radar-viewer trend-radar-mcp`
-- **AND THEN** 脚本必须执行 `docker compose -f docker-compose-build.yml up -d --force-recreate trend-radar trend-radar-viewer trend-radar-mcp`
+- **AND THEN** 脚本必须执行 `docker compose -f docker-compose-build.yml build hotnews hotnews-viewer hotnews-mcp`
+- **AND THEN** 脚本必须执行 `docker compose -f docker-compose-build.yml up -d --force-recreate hotnews hotnews-viewer hotnews-mcp`
 
 #### Scenario: 部署失败自动回滚
 - **WHEN** 服务器端 pull/build/up 任一步失败
@@ -28,7 +28,7 @@
 #### Scenario: 成功后健康检查与容器状态确认
 - **WHEN** 服务器端 build/up 成功
 - **THEN** 脚本必须执行 `curl -fsS http://127.0.0.1:8090/health && echo`
-- **AND THEN** 脚本必须执行 `docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep trend-radar`
+- **AND THEN** 脚本必须执行 `docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep hotnews`
 
 #### Scenario: SSH 交互式密码输入
 - **WHEN** 用户环境未配置 SSH key

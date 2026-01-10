@@ -21,8 +21,8 @@
 - Affected specs:
   - `rss-source-catalog`
 - Affected code:
-  - `trendradar/web/rss_admin.py`
-  - `trendradar/web/templates/admin_rss_sources.html`
+  - `hotnews/web/rss_admin.py`
+  - `hotnews/web/templates/admin_rss_sources.html`
 
 ## Non-Goals
 
