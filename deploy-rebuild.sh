@@ -25,6 +25,10 @@ DRY_RUN=false
 INCLUDE_DOCS=false
 COMMIT_MSG=""
 
+CHANGED_FILES=()
+DEPLOY_FILES=()
+IGNORED_FILES=()
+
 print_usage() {
   cat <<'USAGE'
 Usage:
