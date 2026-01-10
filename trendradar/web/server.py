@@ -43,21 +43,51 @@ from trendradar.crawler import DataFetcher
 from trendradar.core import load_config
 from trendradar.storage import convert_crawl_results_to_news_data
 from trendradar.web.db_online import get_online_db_conn
-from trendradar.web.rss_admin import router as _rss_admin_router
-from trendradar.web.rss_usage_metrics import router as _rss_usage_router
-from trendradar.web.rss_usage_metrics import rss_usage_record
+# [KERNEL] Dynamic Loading of Admin Modules
+_rss_admin_router = None
+_rss_usage_router = None
+_custom_source_router = None
+_newsnow_router = None
+_platform_admin_router = None
+auto_fetch_scheduler = None
+rss_scheduler = None
+
+try:
+    # Try importing from kernel (private directory)
+    from trendradar.kernel.admin import rss_admin
+    _rss_admin_router = rss_admin.router
+    
+    from trendradar.kernel.admin import custom_source_admin
+    _custom_source_router = custom_source_admin.router
+    
+    from trendradar.kernel.admin import newsnow_admin
+    _newsnow_router = newsnow_admin.router
+    
+    from trendradar.kernel.admin import platform_admin
+    _platform_admin_router = platform_admin.router
+    
+    from trendradar.kernel.scheduler import rss_scheduler
+    from trendradar.kernel.scheduler import auto_fetch_scheduler
+    
+    from trendradar.web.rss_usage_metrics import router as _rss_usage_router
+    print("✅ Kernel modules loaded successfully.")
+except ImportError as e:
+    print(f"⚠️ Kernel modules not found, running in public viewer mode. ({e})")
+    # Try loading usage metrics if available publicly
+    try:
+        from trendradar.web.rss_usage_metrics import router as _rss_usage_router
+    except ImportError:
+        pass
+
+# Always public modules
 from trendradar.web.rss_proxy import router as _rss_proxy_router
 from trendradar.web.rss_proxy import rss_proxy_fetch_cached, rss_proxy_fetch_warmup, validate_http_url
-from trendradar.web import auto_fetch_scheduler
-from trendradar.web import rss_scheduler
 from trendradar.web import page_rendering
 from trendradar.web.misc_routes import router as _misc_router
 from trendradar.web.online_routes import router as _online_router
 from trendradar.web.viewer_controls_routes import router as _viewer_controls_router
 from trendradar.web.fetch_metrics_routes import router as _fetch_metrics_router
 from trendradar.web.system_routes import router as _system_router
-from trendradar.web.custom_source_admin import router as _custom_source_router
-from trendradar.web.newsnow_admin import router as _newsnow_router
 from trendradar.web.user_db import (
     create_user_with_cookie_identity,
     get_user_db_conn,
@@ -454,20 +484,22 @@ app.state.project_root = project_root
 # 启用 Gzip 压缩（响应大于 500 字节时压缩）
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
-from trendradar.web.newsnow_admin import router as _newsnow_router
-from trendradar.web.platform_admin import router as _platform_admin_router
-
-app.include_router(_rss_admin_router)
-app.include_router(_rss_usage_router)
+if _rss_admin_router: app.include_router(_rss_admin_router)
+if _rss_usage_router: app.include_router(_rss_usage_router)
 app.include_router(_rss_proxy_router)
 app.include_router(_misc_router)
 app.include_router(_online_router)
 app.include_router(_viewer_controls_router)
 app.include_router(_fetch_metrics_router)
 app.include_router(_system_router)
-app.include_router(_custom_source_router)
-app.include_router(_newsnow_router)
-app.include_router(_platform_admin_router)
+if _custom_source_router: app.include_router(_custom_source_router)
+if _newsnow_router: app.include_router(_newsnow_router)
+if _platform_admin_router: app.include_router(_platform_admin_router)
+
+# [KERNEL] Kernel Static Files
+kernel_static = Path(__file__).parent.parent / "kernel" / "static"
+if kernel_static.exists():
+    app.mount("/static_kernel", StaticFiles(directory=str(kernel_static)), name="static_kernel")
 
 # 挂载静态文件目录（带缓存控制）
 static_dir = Path(__file__).parent / "static"
@@ -552,9 +584,17 @@ class UnicodeJSONResponse(Response):
         ).encode("utf-8")
 
 # 配置模板目录
+# 配置模板目录
+template_paths = [str(Path(__file__).parent / "templates")]
+
+# [KERNEL] Kernel Templates
+kernel_tpl = Path(__file__).parent.parent / "kernel" / "templates"
+if kernel_tpl.exists():
+    template_paths.append(str(kernel_tpl))
+
 templates_dir = Path(__file__).parent / "templates"
 templates_dir.mkdir(exist_ok=True)
-templates = Jinja2Templates(directory=str(templates_dir))
+templates = Jinja2Templates(directory=template_paths)
 app.state.templates = templates
 
 # 全局服务实例
@@ -928,7 +968,7 @@ async def fetch_news_data():
             storage.save_news_data(news_data)
 
             try:
-                from trendradar.providers.runner import build_default_registry, run_provider_ingestion_once
+                from trendradar.kernel.providers.runner import build_default_registry, run_provider_ingestion_once
 
                 print(f"[{now.strftime('%H:%M:%S')}] 🔄 运行 Provider Ingestion...")
                 ok, metrics = run_provider_ingestion_once(
@@ -2643,7 +2683,10 @@ async def on_startup():
         
         if auto_fetch:
             print(f"📅 自动启动定时获取任务 (间隔: {fetch_interval} 分钟)")
-            auto_fetch_scheduler.start_scheduler(lambda: fetch_news_data(), int(fetch_interval))
+            if auto_fetch_scheduler:
+                auto_fetch_scheduler.start_scheduler(lambda: fetch_news_data(), int(fetch_interval))
+            else:
+                print("⚠️ Auto-fetch scheduler module not loaded (Public Mode).")
 
             # scheduler_loop 本身会立即执行一次 fetch_news_data()，避免启动时重复触发
     except Exception as e:

@@ -47,7 +47,7 @@ async def api_nba_today():
     except Exception as e:
         return JSONResponse(content={"detail": f"Failed to fetch Tencent NBA data: {e}"}, status_code=502)
 
-    from trendradar.providers.tencent_nba import _extract_tencent_nba_matches
+    from trendradar.kernel.providers.tencent_nba import _extract_tencent_nba_matches
 
     games = _extract_tencent_nba_matches(payload)
     return UnicodeJSONResponse(content={"date": today, "games": games})

@@ -6,8 +6,13 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
 from mcp_server.services.cache_service import get_cache
-from trendradar.web import auto_fetch_scheduler
 
+# [KERNEL] Dynamic Scheduler
+auto_fetch_scheduler = None
+try:
+    from trendradar.kernel.scheduler import auto_fetch_scheduler
+except ImportError:
+    pass
 
 router = APIRouter()
 
@@ -45,6 +50,9 @@ async def health():
 
 @router.post("/api/scheduler/start")
 async def api_start_scheduler(request: Request, interval: int = Query(30, ge=5, le=1440)):
+    if not auto_fetch_scheduler:
+         return UnicodeJSONResponse(content={"success": False, "message": "Scheduler module not available"}, status_code=501)
+    
     fn = _get_fetch_news_data(request)
     auto_fetch_scheduler.start_scheduler(lambda: fn(), interval)
     return UnicodeJSONResponse(
@@ -58,12 +66,23 @@ async def api_start_scheduler(request: Request, interval: int = Query(30, ge=5, 
 
 @router.post("/api/scheduler/stop")
 async def api_stop_scheduler():
+    if not auto_fetch_scheduler:
+         return UnicodeJSONResponse(content={"success": False, "message": "Scheduler module not available"}, status_code=501)
     auto_fetch_scheduler.stop_scheduler()
     return UnicodeJSONResponse(content={"success": True, "message": "定时任务已停止"})
 
 
 @router.get("/api/scheduler/status")
 async def api_scheduler_status():
+    if not auto_fetch_scheduler:
+        return UnicodeJSONResponse(
+            content={
+                "running": False,
+                "interval_minutes": 0,
+                "last_fetch_time": None,
+                "detail": "Scheduler module not available"
+            }
+        )
     st = auto_fetch_scheduler.status()
     last_dt = st.get("last_fetch_time")
     return UnicodeJSONResponse(
