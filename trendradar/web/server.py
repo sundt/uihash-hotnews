@@ -712,8 +712,70 @@ def _db_find_enabled_source_by_url(url: str) -> Optional[Dict[str, Any]]:
     return _row_to_rss_source(row)
 
 
+def _init_newsnow_platforms_if_empty() -> None:
+    """Initialize newsnow_platforms table from config.yaml if empty."""
+    conn = _get_online_db_conn()
+    cur = conn.execute("SELECT COUNT(*) FROM newsnow_platforms")
+    row = cur.fetchone()
+    if row and int(row[0]) > 0:
+        return
+    
+    # Load platforms from config.yaml
+    try:
+        config = load_config(str(project_root / "config" / "config.yaml"))
+        platforms = config.get("PLATFORMS", [])
+        if not platforms:
+            return
+        
+        # Category mapping based on ID prefixes
+        category_map = {
+            "toutiao": "综合新闻", "baidu": "综合新闻", "thepaper": "综合新闻",
+            "ifeng": "综合新闻", "cankaoxiaoxi": "综合新闻", "zaobao": "综合新闻",
+            "tencent": "综合新闻",
+            "wallstreetcn": "财经投资", "cls": "财经投资", "gelonghui": "财经投资",
+            "xueqiu": "财经投资", "jin10": "财经投资",
+            "weibo": "社交娱乐", "douyin": "社交娱乐", "bilibili": "社交娱乐",
+            "tieba": "社交娱乐", "zhihu": "社交娱乐", "hupu": "社交娱乐", "douban": "社交娱乐",
+            "ithome": "科技", "juejin": "科技", "github": "科技", "hackernews": "科技",
+            "v2ex": "科技", "sspai": "科技", "36kr": "科技", "producthunt": "科技", "freebuf": "科技"
+        }
+        
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        for idx, p in enumerate(platforms):
+            if not isinstance(p, dict):
+                continue
+            pid = str(p.get("id") or "").strip()
+            pname = str(p.get("name") or pid).strip()
+            if not pid:
+                continue
+            
+            # Determine category
+            category = ""
+            for prefix, cat in category_map.items():
+                if pid.startswith(prefix):
+                    category = cat
+                    break
+            
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO newsnow_platforms 
+                       (id, name, category, enabled, sort_order, created_at, updated_at)
+                       VALUES (?, ?, ?, 1, ?, ?, ?)""",
+                    (pid, pname, category, idx, now, now)
+                )
+            except Exception:
+                pass
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Warning: Failed to initialize newsnow_platforms: {e}")
+
+
+
 app.state.require_admin = _require_admin
 app.state.init_default_rss_sources_if_empty = _init_default_rss_sources_if_empty
+app.state.init_newsnow_platforms_if_empty = _init_newsnow_platforms_if_empty
 app.state.db_list_rss_sources = _db_list_rss_sources
 app.state.row_to_rss_source = _row_to_rss_source
 app.state.db_get_rss_source = _db_get_rss_source
@@ -2555,6 +2617,7 @@ async def on_startup():
     try:
         _get_online_db_conn()
         _init_default_rss_sources_if_empty()
+        _init_newsnow_platforms_if_empty()
         rss_scheduler.rss_enforce_high_freq_cap(project_root)
         rss_scheduler.rss_init_schedule_defaults(project_root)
     except Exception as e:

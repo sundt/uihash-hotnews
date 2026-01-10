@@ -195,6 +195,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("custom_sources", "category", "TEXT DEFAULT ''")
     _ensure_column("custom_sources", "country", "TEXT DEFAULT ''")
     _ensure_column("custom_sources", "language", "TEXT DEFAULT ''")
+    _ensure_column("custom_sources", "backoff_until", "TEXT DEFAULT ''")
+    _ensure_column("custom_sources", "entries_count", "INTEGER DEFAULT 0")
+    _ensure_column("custom_sources", "fail_count", "INTEGER DEFAULT 0")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
