@@ -106,3 +106,4 @@ hotnews/kernel/
 
 # Documentation
 docs/
+deploy-rebuild.sh
