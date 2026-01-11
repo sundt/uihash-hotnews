@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urljoin, urlparse
 
 from fastapi import FastAPI, Request, Query, Body, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -487,6 +488,21 @@ app.state.project_root = project_root
 
 # 启用 Gzip 压缩（响应大于 500 字节时压缩）
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# CORS 配置 - 通过环境变量控制允许的域名
+# 格式: HOTNEWS_CORS_ORIGINS=https://example.com,https://app.example.com
+# 留空则只允许同源请求
+_cors_origins_env = os.environ.get("HOTNEWS_CORS_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()] if _cors_origins_env else []
+
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["*"],
+    )
 
 if _rss_admin_router: app.include_router(_rss_admin_router)
 if _rss_usage_router: app.include_router(_rss_usage_router)
