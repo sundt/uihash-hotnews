@@ -96,7 +96,12 @@ function _ensureLayout() {
         grid.style.overflowX = 'auto';
         grid.style.overflowY = 'hidden';
         grid.style.alignItems = 'flex-start'; // Align items to top
+        // Prevent scroll from bubbling to page when at container boundaries
+        grid.style.overscrollBehavior = 'contain';
         pane.appendChild(grid);
+    } else {
+        // Ensure overscroll behavior is set even if grid already exists
+        grid.style.overscrollBehavior = 'contain';
     }
 
     // Mark as injected
@@ -115,29 +120,32 @@ async function _fetchJson(url) {
 
 /**
  * Fetch a batch of items (limit/offset).
+ * Added drop_published_at_zero=0 to include items without published date
  */
 async function _fetchTimelineBatch(limit, offset) {
-    const url = `/api/rss/brief/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`;
+    const url = `/api/rss/brief/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}&drop_published_at_zero=0`;
     const payload = await _fetchJson(url);
     return Array.isArray(payload?.items) ? payload.items : [];
 }
 
 /**
  * Add a card to the grid
+ * @param {Array} items - The items to display in this card
+ * @param {number} cardIndex - The 0-based card index (0 = first card, 1 = second card, etc.)
+ * @param {HTMLElement} container - The grid container
  */
-function _appendCard(items, startIdx, endIdx, container) {
+function _appendCard(items, cardIndex, container) {
     if (!items || !items.length) return;
 
     const card = document.createElement('div');
     card.className = 'platform-card tr-morning-brief-card';
     card.style.minWidth = '360px'; // Ensure cards have width
-    card.dataset.platform = `mb-slice-${startIdx}`;
+    card.dataset.platform = `mb-slice-${cardIndex}`;
     card.draggable = false;
 
-    // Adjust logic to correctly display range like 1-50, 51-100
-    // startIdx is 0-based offset, so display is startIdx+1
-    const displayStart = startIdx + 1;
-    const displayEnd = startIdx + items.length;
+    // Calculate display range: cardIndex 0 = 1-50, cardIndex 1 = 51-100, etc.
+    const displayStart = cardIndex * ITEMS_PER_CARD + 1;
+    const displayEnd = cardIndex * ITEMS_PER_CARD + items.length;
 
     card.innerHTML = `
         <div class="platform-header">
@@ -146,20 +154,18 @@ function _appendCard(items, startIdx, endIdx, container) {
             </div>
             <div class="platform-header-actions"></div>
         </div>
-        <ul class="news-list" data-mb-list="slice-${startIdx}">
+        <ul class="news-list" data-mb-list="slice-${cardIndex}">
             ${_buildNewsItemsHtml(items, { emptyText: '暂无内容' })}
         </ul>
     `;
 
-    // Convert rendered indices to continue from the offset
-    // _buildNewsItemsHtml uses 0-based index + 1. 
-    // We need to shift these indices.
+    // Update indices to reflect global position (not local 1, 2, 3... but global 1, 2... 51, 52...)
     const indices = card.querySelectorAll('.news-index');
     indices.forEach((el, i) => {
         el.textContent = String(displayStart + i);
     });
 
-    // Insert before sentinel if exists
+    // Always append to end (before sentinel if it exists)
     const sentinel = container.querySelector('#mb-load-sentinel');
     if (sentinel) {
         container.insertBefore(card, sentinel);
@@ -237,7 +243,9 @@ async function _loadNextBatch() {
 
         const grid = _getGrid();
         if (grid) {
-            _appendCard(items, _mbOffset, _mbOffset + items.length, grid);
+            // Calculate which card number this is (0-based)
+            const cardIndex = Math.floor(_mbOffset / ITEMS_PER_CARD);
+            _appendCard(items, cardIndex, grid);
         }
 
         _mbOffset += items.length;
@@ -282,7 +290,8 @@ async function _loadTimeline() {
     // Chunk into cards
     for (let i = 0; i < items.length; i += ITEMS_PER_CARD) {
         const chunk = items.slice(i, i + ITEMS_PER_CARD);
-        _appendCard(chunk, i, i + chunk.length, grid); // i is the offset
+        const cardIndex = Math.floor(i / ITEMS_PER_CARD); // 0, 1, 2, ...
+        _appendCard(chunk, cardIndex, grid);
     }
 
     _mbOffset = items.length;
