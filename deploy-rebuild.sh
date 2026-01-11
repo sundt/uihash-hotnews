@@ -153,12 +153,13 @@ filter_files_for_commit() {
 }
 
 collect_changed_files
-filter_files_for_commit
 
 if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
   echo "No local changes detected. Nothing to commit/deploy."
   exit 0
 fi
+
+filter_files_for_commit
 
 if [ ${#DEPLOY_FILES[@]} -eq 0 ]; then
   if [ "$INCLUDE_DOCS" = "false" ]; then
