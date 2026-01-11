@@ -107,3 +107,4 @@ hotnews/kernel/
 # Documentation
 docs/
 deploy-rebuild.sh
+scripts/rsync-sync.sh
