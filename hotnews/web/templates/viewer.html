@@ -14,9 +14,10 @@
     <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}" as="script">
+    <script id="system-settings-json" type="application/json">{{ sys_settings | tojson }}</script>
     <script>
         (function () { try { try { var p = new URLSearchParams(location.search || ''); if (p.get('e2e') === '1') return; } catch (e2) { } var r = localStorage.getItem('hotnews_categories_config'); if (r) { var c = JSON.parse(r); if ((c.customCategories && c.customCategories.length > 0) || (c.hiddenDefaultCategories && c.hiddenDefaultCategories.length > 0)) { document.write('<style id="early-hide">.category-tabs,.tab-content-area{display:none!important}</style>'); } } } catch (e) { } })();
-        window.SYSTEM_SETTINGS = {{ sys_settings | tojson }};
+        try { window.SYSTEM_SETTINGS = JSON.parse((document.getElementById('system-settings-json') || {}).textContent || '{}'); } catch (e) { window.SYSTEM_SETTINGS = {}; }
     </script>
     <script type="text/javascript">
         (function (c, l, a, r, i, t, y) {

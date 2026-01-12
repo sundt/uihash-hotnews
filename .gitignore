@@ -106,7 +106,7 @@ hotnews/kernel/
 
 # Documentation
 docs/
-deploy-rebuild.sh
+
 scripts/rsync-sync.sh
 
 # AI Rules (Local only)
