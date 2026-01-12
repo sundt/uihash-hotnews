@@ -51,5 +51,26 @@ Schema/建表/迁移的权威来源（改表/加字段时必须同步更新对�
 - 示例格式：`YYYY-MM-DD: [area] 简述变更 + 关键文件`。
 
 ## 禁忌/安全
-- 不要把 webhook/token/password 等敏感信息写入仓库或文档。
 - 文档示例请使用占位符。
+
+## 代码规范与质量 (Code Quality Guide)
+- **拒绝巨型文件**: 当文件行数超过 400 行时，必须考虑拆分或重构。
+- **模块化原则**: 避免将所有逻辑塞入单一文件。新功能应优先创建新文件/新模块（如 `hotnews/kernel/providers/custom_...py` 而非修改 `dynamic_py.py`）。
+- **Web 前端**: JS 代码必须放在 `static/js/src/` 下并保持模块化，禁止直接在大文件中追加。
+- **Python 后端**: 业务逻辑应拆分到 `kernel/` 下的独立子模块，避免 `server.py` 或 `rss_admin.py` 过大。
+
+## 协作与工程规范 (Engineering Standards)
+
+### 1. Git 分支策略
+- **直推 Main**: 仅限文档、配置微调、单文件 Hotfix。
+- **必须开分支**: 
+  - 涉及 >3 个文件修改。
+  - 数据库 Schema 变更。
+  - 核心逻辑重构。
+
+### 2. 代码防御性 (Anti-Crash)
+- **外部调用**: 所有网络请求（RSS/AI/API）必须包含 `try-except` 异常捕获，禁止裸奔。
+- **超时控制**: 所有 requests 必须设置 `timeout`。
+
+### 3. 配置规范
+- **禁止硬编码**: 严禁在代码中写死 IP、密码、密钥。必须使用 `os.environ` 或 `config.yaml`。
