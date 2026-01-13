@@ -110,8 +110,102 @@ class DataService:
 
                 news_list.append(news_item)
 
-        # 按排名排序
-        news_list.sort(key=lambda x: x["rank"])
+        # [Inject RSS Data]
+        try:
+            from hotnews.web.db_online import get_online_db_conn
+            # Determine if we should fetch RSS
+            should_fetch_rss = True
+            rss_source_filter = []
+            
+            if platforms is not None:
+                # Extract rss-* IDs
+                rss_ids = [p[4:] for p in platforms if p.startswith("rss-")]
+                if not rss_ids and len(platforms) > 0:
+                    # Specific platforms requested, but none are RSS (and we must respect filter)
+                    # However, if platforms=['tech'], this is a category? No, API expects IDs.
+                    # If user passed non-RSS IDs, we strictly don't fetch RSS.
+                    # But wait, if platforms list contains NO rss- IDs, we skip RSS.
+                    should_fetch_rss = False
+                elif rss_ids:
+                    rss_source_filter = rss_ids
+            
+            if should_fetch_rss:
+                # Use project_root from self.parser
+                conn = get_online_db_conn(self.parser.project_root)
+                
+                # Build SQL
+                sql_parts = [
+                    "SELECT e.source_id, e.title, e.url, e.published_at, s.name FROM rss_entries e JOIN rss_sources s ON s.id = e.source_id WHERE s.enabled = 1"
+                ]
+                sql_args = []
+                
+                if rss_source_filter:
+                    placeholders = ",".join(["?"] * len(rss_source_filter))
+                    sql_parts.append(f"AND s.id IN ({placeholders})")
+                    sql_args.extend(rss_source_filter)
+                
+                # Fetch recent items. For mixed view, we want fresh stuff.
+                # Use limit to avoid huge fetch.
+                sql_parts.append("ORDER BY e.published_at DESC LIMIT ?")
+                sql_args.append(limit)
+                
+                cur = conn.execute(" ".join(sql_parts), tuple(sql_args))
+                rows = cur.fetchall()
+                
+                for r in rows:
+                    sid, title, url, pub, sname = r
+                    rss_pid = f"rss-{sid}"
+                    try:
+                        ts_str = datetime.fromtimestamp(pub).strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                    item = {
+                        "title": title,
+                        "platform": rss_pid,
+                        "platform_name": sname or "RSS Source",
+                        "rank": 0, # RSS has no rank
+                        "timestamp": ts_str
+                    }
+                    if include_url:
+                        item["url"] = url
+                        item["mobileUrl"] = ""
+                        
+                    news_list.append(item)
+                    
+        except ImportError:
+            pass # Ignore if module not found (e.g. strict isolation)
+        except Exception as e:
+            # Silently ignore DB errors to avoid breaking the view
+            pass
+
+        # 按排名排序 (Original logic sorted by rank. Now we have mixed data.)
+        # Strategy: Items with rank > 0 (crawler) keeps priority? 
+        # Or mixed by time? 
+        # Given "Tech News" is usually a feed, Time sort is safer for RSS visibility.
+        # But for "Hot Lists", Rank is key.
+        # Let's use a hybrid sort:
+        def _sort_key(x):
+            # If rank > 0, it's a hot list item. We want these at top usually?
+            # Or do we want Newest first?
+            # If we return 'rank' as key, 0 (RSS) comes fast.
+            # But standard hot items have rank 1. 0 < 1. So RSS comes FIRST.
+            # That is acceptable. RSS updates are "Breaking".
+            r = int(x.get("rank", 0))
+            if r == 0:
+                 # It's an RSS item or unranked item. Sort by timestamp descending.
+                 # We can't mix numbers and strings easily in simple key.
+                 # Let's sort by timestamp globally for now as safe default for Mixed content.
+                 return x.get("timestamp", "")
+            else:
+                 # Use timestamp for them too?
+                 return x.get("timestamp", "")
+
+        # Actually, existing code sorted by rank.
+        # news_list.sort(key=lambda x: x["rank"])
+        
+        # New Sort: Timestamp DESC (Newest first)
+        news_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
         # 限制返回数量
         result = news_list[:limit]

@@ -157,7 +157,7 @@ export const tabs = {
         storage.setRaw(TAB_STORAGE_KEY, categoryId);
 
         try {
-            window.dispatchEvent(new CustomEvent(TAB_SWITCHED_EVENT, { detail: { categoryId } }));
+            window.dispatchEvent(new CustomEvent(TAB_SWITCHED_EVENT, { detail: { categoryId, hasUpdate } }));
         } catch (e) {
         }
 
