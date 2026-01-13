@@ -46,6 +46,9 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     echo "   [Remote] git pull..."
     git pull origin main
     
+    echo "   [Remote] Updating submodules..."
+    git submodule update --init --recursive
+    
     echo "   [Remote] Building services ($SERVICES)..."
     cd docker
     docker compose -f ${DC_FILE} build $SERVICES
