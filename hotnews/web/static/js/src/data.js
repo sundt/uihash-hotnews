@@ -731,6 +731,12 @@ export const data = {
 
             const platforms = cat?.platforms || {};
             const orderedIds = Object.keys(platforms || {});
+
+            // Smart Scroll-Aware Loading: Only hydrate cards near saved position
+            const anchorPid = (isActiveCategory && state?.activeTabPlatformAnchorPlatformId) || null;
+            const anchorIdx = anchorPid ? orderedIds.indexOf(anchorPid) : -1;
+            const BUFFER_RANGE = 3; // Load anchor ± 3 cards
+
             const platformCards = orderedIds.map((platformId, idx0) => {
                 const platform = platforms?.[platformId];
                 if (!platform) return '';
@@ -738,7 +744,12 @@ export const data = {
                 const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
                 const news = Array.isArray(platform?.news) ? platform.news : [];
                 const totalCount = news.length;
-                const shouldHydrate = isActiveCategory && idx0 < 3;
+
+                // Only hydrate cards within range of anchor (or first 3 if no anchor)
+                const shouldHydrate = isActiveCategory && (
+                    anchorIdx < 0 ? idx0 < 3 : (idx0 >= anchorIdx - BUFFER_RANGE && idx0 <= anchorIdx + BUFFER_RANGE)
+                );
+
                 const isLazy = !shouldHydrate;
                 const initialCount = shouldHydrate ? Math.min(totalCount, CATEGORY_PAGE_SIZE) : 0;
                 const pagingOffset = (platformId && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[platformId])) ? state.pagingOffsets[platformId] : 0;

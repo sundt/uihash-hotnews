@@ -87,13 +87,17 @@ class DataService:
                 # 取第一个排名
                 rank = info["ranks"][0] if info["ranks"] else 0
 
-                # 优先使用 published_at
+                # 优先使用 published_at, 其次使用 last_time (最后抓取时间), 最后使用 fetch_time
                 ts = fetch_time.strftime("%Y-%m-%d %H:%M:%S")
+                
                 if info.get("published_at"):
                     try:
                         ts = datetime.fromtimestamp(int(info["published_at"])).strftime("%Y-%m-%d %H:%M:%S")
                     except:
                         pass
+                elif info.get("last_time"):
+                    # 使用最后抓取时间作为 fallback
+                    ts = str(info["last_time"])
 
                 news_item = {
                     "title": title,
@@ -180,32 +184,14 @@ class DataService:
             pass
 
         # 按排名排序 (Original logic sorted by rank. Now we have mixed data.)
-        # Strategy: Items with rank > 0 (crawler) keeps priority? 
-        # Or mixed by time? 
-        # Given "Tech News" is usually a feed, Time sort is safer for RSS visibility.
-        # But for "Hot Lists", Rank is key.
-        # Let's use a hybrid sort:
-        def _sort_key(x):
-            # If rank > 0, it's a hot list item. We want these at top usually?
-            # Or do we want Newest first?
-            # If we return 'rank' as key, 0 (RSS) comes fast.
-            # But standard hot items have rank 1. 0 < 1. So RSS comes FIRST.
-            # That is acceptable. RSS updates are "Breaking".
-            r = int(x.get("rank", 0))
-            if r == 0:
-                 # It's an RSS item or unranked item. Sort by timestamp descending.
-                 # We can't mix numbers and strings easily in simple key.
-                 # Let's sort by timestamp globally for now as safe default for Mixed content.
-                 return x.get("timestamp", "")
-            else:
-                 # Use timestamp for them too?
-                 return x.get("timestamp", "")
-
-        # Actually, existing code sorted by rank.
-        # news_list.sort(key=lambda x: x["rank"])
-        
-        # New Sort: Timestamp DESC (Newest first)
-        news_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        # New Sort: Timestamp DESC (Newest first), then Rank ASC (High rank first, 1 is better than 10)
+        # Note: We sort DESC, so to get Rank 1 before Rank 10, we need to negate rank (or use inverse logic).
+        # (Ts=High, Rank=Low) -> Key (Ts, -Rank).
+        # Example: T=10
+        # A: Rank 1 -> Key (10, -1)
+        # B: Rank 10 -> Key (10, -10)
+        # (10, -1) > (10, -10). So A comes before B. Correct.
+        news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
 
         # 限制返回数量
         result = news_list[:limit]

@@ -93,9 +93,9 @@ export const settings = {
         try {
             const maxAge = 365 * 24 * 60 * 60;
             const hasCustom = (config.customCategories?.length > 0) ||
-                             (config.hiddenDefaultCategories?.length > 0) ||
-                             (config.hiddenPlatforms?.length > 0) ||
-                             (config.categoryOrder?.length > 0);
+                (config.hiddenDefaultCategories?.length > 0) ||
+                (config.hiddenPlatforms?.length > 0) ||
+                (config.categoryOrder?.length > 0);
 
             if (hasCustom) {
                 document.cookie = `hotnews_has_config=1; path=/; max-age=${maxAge}; SameSite=Lax`;
@@ -601,6 +601,62 @@ export const settings = {
         const container = document.getElementById('platformSelectList');
         const items = container.querySelectorAll('.platform-select-item');
 
+        // Auto-scroll state
+        const AUTO_SCROLL_EDGE_PX = 60;
+        const AUTO_SCROLL_MAX_SPEED = 20;
+        let autoScrollRaf = null;
+        let autoScrollDir = 0;
+        let autoScrollSpeed = 0;
+
+        const stopAutoScroll = () => {
+            if (autoScrollRaf) cancelAnimationFrame(autoScrollRaf);
+            autoScrollRaf = null;
+            autoScrollDir = 0;
+            autoScrollSpeed = 0;
+        };
+
+        const runAutoScroll = () => {
+            if (!autoScrollDir || !autoScrollSpeed) {
+                stopAutoScroll();
+                return;
+            }
+            const maxScroll = Math.max(0, (container.scrollHeight || 0) - (container.clientHeight || 0));
+            if (maxScroll <= 0) {
+                stopAutoScroll();
+                return;
+            }
+            const next = Math.max(0, Math.min(maxScroll, (container.scrollTop || 0) + autoScrollDir * autoScrollSpeed));
+            container.scrollTop = next;
+            autoScrollRaf = requestAnimationFrame(runAutoScroll);
+        };
+
+        const updateAutoScroll = (e) => {
+            const rect = container.getBoundingClientRect();
+            const y = e.clientY;
+            const distTop = y - rect.top;
+            const distBottom = rect.bottom - y;
+
+            let dir = 0, dist = 0;
+            if (distTop >= 0 && distTop <= AUTO_SCROLL_EDGE_PX) {
+                dir = -1;
+                dist = distTop;
+            } else if (distBottom >= 0 && distBottom <= AUTO_SCROLL_EDGE_PX) {
+                dir = 1;
+                dist = distBottom;
+            } else {
+                stopAutoScroll();
+                return;
+            }
+
+            const intensity = Math.max(0, Math.min(1, (AUTO_SCROLL_EDGE_PX - dist) / AUTO_SCROLL_EDGE_PX));
+            autoScrollSpeed = Math.max(2, Math.round(intensity * intensity * AUTO_SCROLL_MAX_SPEED));
+            autoScrollDir = dir;
+
+            if (!autoScrollRaf) {
+                autoScrollRaf = requestAnimationFrame(runAutoScroll);
+            }
+        };
+
         items.forEach(item => {
             item.addEventListener('dragstart', (e) => {
                 item.classList.add('dragging');
@@ -609,10 +665,13 @@ export const settings = {
 
             item.addEventListener('dragend', () => {
                 item.classList.remove('dragging');
+                stopAutoScroll();
             });
 
             item.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                updateAutoScroll(e);
+
                 const dragging = container.querySelector('.dragging');
                 if (dragging && dragging !== item) {
                     const rect = item.getBoundingClientRect();
@@ -624,6 +683,15 @@ export const settings = {
                     }
                 }
             });
+        });
+
+        // Container-level dragover for continuous auto-scroll (especially at edges)
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            // Only run auto-scroll if something is being dragged
+            if (container.querySelector('.dragging')) {
+                updateAutoScroll(e);
+            }
         });
     },
 
@@ -947,7 +1015,7 @@ window.setPlatformSearchQuery = (query) => settings.setPlatformSearchQuery(query
 TR.settings = settings;
 
 // 初始化时同步现有配置到 Cookie
-ready(function() {
+ready(function () {
     const existingConfig = settings.getCategoryConfig();
     if (existingConfig) {
         settings.syncConfigToCookie(existingConfig);
