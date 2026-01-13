@@ -150,6 +150,16 @@ export const tabs = {
             }
             return;
         }
+
+        // Check if this tab has update indicator (red dot)
+        const updateDot = tabEl.querySelector('.update-dot.show');
+        const hasUpdate = !!updateDot;
+
+        // Hide the red dot
+        if (updateDot) {
+            updateDot.classList.remove('show');
+        }
+
         document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
         tabEl.classList.add('active');
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -231,7 +241,7 @@ window.switchTab = (categoryId) => tabs.switchTab(categoryId);
 TR.tabs = tabs;
 
 // 初始化
-ready(function() {
+ready(function () {
     try {
         window.addEventListener(EXPLORE_MODAL_OPENED_EVENT, () => {
             _recordBeforeExploreModalOpen();

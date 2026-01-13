@@ -2,7 +2,8 @@ import { TR, ready, escapeHtml } from './core.js';
 
 const EXPLORE_TAB_ID = 'explore';
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
-const INITIAL_CARDS = 1; // Load 1 card initially
+const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
+const MAX_CARDS = 20; // Maximum number of cards to load (prevent infinite loading)
 
 function getItemsPerCard() {
     return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.items_per_card) || 50;
@@ -183,6 +184,16 @@ function _attachObserver() {
     const sentinel = pane.querySelector('#explore-load-sentinel');
     if (sentinel) {
         _exploreObserver.observe(sentinel);
+
+        // Manual check: if sentinel is already visible (e.g., on wide screens),
+        // trigger load immediately since Observer callback may not fire
+        setTimeout(() => {
+            const rect = sentinel.getBoundingClientRect();
+            const grid = pane.querySelector('.platform-grid');
+            if (grid && rect.left < grid.getBoundingClientRect().right) {
+                _loadNextBatch().catch(() => { });
+            }
+        }, 100);
     }
 }
 
@@ -192,6 +203,19 @@ async function _loadNextBatch() {
     _exploreInFlight = true;
     try {
         const limit = getItemsPerCard();
+        const currentCardCount = Math.floor(_exploreOffset / limit);
+
+        // Safety check: stop if we've loaded too many cards
+        if (currentCardCount >= MAX_CARDS) {
+            _exploreFinished = true;
+            const s = document.getElementById('explore-load-sentinel');
+            if (s) {
+                s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已达到最大显示数量</div>';
+                s.style.width = '40px';
+            }
+            return;
+        }
+
         const items = await _fetchTimelineBatch(limit, _exploreOffset);
 
         if (!items.length) {
@@ -265,6 +289,13 @@ async function _refreshTimelineIfNeeded() {
     if (_getActiveTabId() !== EXPLORE_TAB_ID) return false;
     if (!_ensureLayout()) return false;
 
+    const grid = _getGrid();
+    if (grid && grid.querySelectorAll('.platform-card').length > 0) {
+        // Already has content, don't reload
+        _exploreInFlight = false;
+        return true;
+    }
+
     _exploreInFlight = true;
     try {
         await _loadTimeline();
@@ -277,8 +308,12 @@ async function _refreshTimelineIfNeeded() {
     }
 }
 
+let _initialized = false;
+
 async function _initialLoad() {
+    if (_initialized) return; // Prevent duplicate initialization
     if (!_ensureLayout()) return;
+    _initialized = true;
     await _refreshTimelineIfNeeded();
 }
 

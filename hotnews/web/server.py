@@ -1657,33 +1657,70 @@ async def api_rss_explore_timeline(
     lim = min(int(limit or 50), 500)
     off = int(offset or 0)
     
+    # Date range validation: 2000-01-01 to current time + 1 year
+    # Timestamp for 2000-01-01: 946684800
+    # Timestamp for current + 1 year (reasonable upper bound)
+    import time
+    min_timestamp = 946684800  # 2000-01-01
+    max_timestamp = int(time.time()) + (365 * 24 * 3600)  # Current + 1 year
+    
     try:
+        # Optimized query: fetch entries first without JOIN
+        # Fetch extra records to account for deduplication
+        fetch_limit = lim * 2  # Over-fetch to account for duplicates
         cur = conn.execute(
             """
-            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
-            FROM rss_entries e
-            LEFT JOIN rss_sources s ON s.id = e.source_id
-            WHERE e.published_at > 0
-            ORDER BY e.published_at DESC, e.id DESC
+            SELECT source_id, title, url, created_at, published_at
+            FROM rss_entries
+            WHERE published_at > 0
+              AND published_at >= ?
+              AND published_at <= ?
+            ORDER BY published_at DESC, id DESC
             LIMIT ? OFFSET ?
             """,
-            (lim, off),
+            (min_timestamp, max_timestamp, fetch_limit, off),
         )
         rows = cur.fetchall() or []
     except Exception:
         rows = []
     
+    # Fetch source names in batch if needed
+    source_ids = list(set(str(r[0] or "").strip() for r in rows if r[0]))
+    source_names = {}
+    if source_ids:
+        try:
+            placeholders = ",".join("?" * len(source_ids))
+            cur = conn.execute(
+                f"SELECT id, name FROM rss_sources WHERE id IN ({placeholders})",
+                source_ids
+            )
+            source_names = {str(r[0]): str(r[1] or "") for r in cur.fetchall()}
+        except Exception:
+            pass
+    
     items: List[Dict[str, Any]] = []
+    seen_titles: set = set()  # Track titles for deduplication
+    
     for r in rows:
+        # Stop if we have enough items after deduplication
+        if len(items) >= lim:
+            break
+            
         sid = str(r[0] or "").strip()
-        title = str(r[1] or "")
+        title = str(r[1] or "").strip()
         url = str(r[2] or "")
         created_at = int(r[3] or 0)
         published_at = int(r[4] or 0)
-        sname = str(r[5] or "")
+        sname = source_names.get(sid, "")
         
         if not url.strip():
             continue
+        
+        # Skip duplicate titles
+        title_key = title.lower()
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
             
         pid = f"rss-{sid}" if sid else "rss-unknown"
         it = _rss_row_to_item(
@@ -2020,6 +2057,65 @@ async def viewer(
         platforms: 指定要查看的平台（逗号分隔）
     """
     return _redirect_to_root(request)
+
+
+@app.get("/api/news/check-updates")
+async def api_news_check_updates():
+    """
+    API: Check if there are new updates in each category.
+    Returns a map of category_id -> has_new (boolean).
+    
+    Uses a simple heuristic: check if the latest item's timestamp
+    is newer than 5 minutes ago (meaning fresh content was added).
+    """
+    import time
+    conn = _get_online_db_conn()
+    
+    # Get all categories
+    categories_result = {}
+    five_minutes_ago = int(time.time()) - 300
+    
+    try:
+        # Check RSS/knowledge category (morning brief)
+        cur = conn.execute(
+            """
+            SELECT MAX(created_at) FROM rss_entries
+            """
+        )
+        row = cur.fetchone()
+        latest_rss = int(row[0] or 0) if row else 0
+        categories_result["knowledge"] = latest_rss > five_minutes_ago
+        
+        # Check explore category (same data source)
+        categories_result["explore"] = latest_rss > five_minutes_ago
+        
+        # Check RSS subscriptions
+        categories_result["rss"] = latest_rss > five_minutes_ago
+        
+    except Exception:
+        pass
+    
+    # Check news_items table for other platforms
+    try:
+        cur = conn.execute(
+            """
+            SELECT MAX(created_at) FROM news_items
+            """
+        )
+        row = cur.fetchone()
+        latest_news = int(row[0] or 0) if row else 0
+        
+        # For "all" category
+        categories_result["all"] = latest_news > five_minutes_ago
+        
+    except Exception:
+        pass
+    
+    return UnicodeJSONResponse(
+        content={
+            "categories": categories_result
+        }
+    )
 
 
 @app.get("/api/news")

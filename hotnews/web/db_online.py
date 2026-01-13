@@ -98,6 +98,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_pub ON rss_entries(source_id, published_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub ON rss_entries(published_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub_id ON rss_entries(published_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_created ON rss_entries(source_id, created_at DESC)")
 
     conn.execute(

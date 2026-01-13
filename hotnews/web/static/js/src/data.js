@@ -970,22 +970,63 @@ export const data = {
     },
 
     setupAjaxAutoRefresh() {
-        const intervalMs = 300000;
-        setInterval(() => {
-            if (document.visibilityState !== 'visible') return;
-            const now = Date.now();
-            if (now - _ajaxLastRefreshAt < intervalMs - 5000) return;
-            this.refreshViewerData({ preserveScroll: true });
-        }, 5000);
+        const checkIntervalMs = 300000; // Check every 5 minutes
 
+        // Silent check for updates - only show red dot, don't refresh
+        const checkForUpdates = async () => {
+            if (document.visibilityState !== 'visible') return;
+
+            try {
+                const resp = await fetch('/api/news/check-updates');
+                if (!resp.ok) return;
+
+                const data = await resp.json();
+                if (data.categories) {
+                    for (const [catId, hasNew] of Object.entries(data.categories)) {
+                        if (hasNew) {
+                            this.showCategoryUpdateDot(catId);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        };
+
+        // Check periodically
+        setInterval(checkForUpdates, checkIntervalMs);
+
+        // Also check when page becomes visible (but no page refresh)
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // 复用相同的间隔判断，避免频繁刷新导致的滚动跳动
-                const now = Date.now();
-                if (now - _ajaxLastRefreshAt < intervalMs - 5000) return;
-                this.refreshViewerData({ preserveScroll: true });
+                // Wait a bit then check
+                setTimeout(checkForUpdates, 2000);
             }
         });
+    },
+
+    showCategoryUpdateDot(categoryId) {
+        const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+        if (!tab) return;
+
+        let dot = tab.querySelector('.update-dot');
+        if (!dot) {
+            dot = document.createElement('span');
+            dot.className = 'update-dot';
+            tab.style.position = 'relative';
+            tab.appendChild(dot);
+        }
+        dot.classList.add('show');
+    },
+
+    hideCategoryUpdateDot(categoryId) {
+        const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+        if (!tab) return;
+
+        const dot = tab.querySelector('.update-dot');
+        if (dot) {
+            dot.classList.remove('show');
+        }
     }
 };
 

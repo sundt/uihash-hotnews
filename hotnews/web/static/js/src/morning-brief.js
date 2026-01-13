@@ -5,7 +5,7 @@ const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
-const INITIAL_CARDS = 1; // Only load 1 card initially to avoid clutter
+const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
 
 function getItemsPerCard() {
     return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.morning_brief_items) || 50;

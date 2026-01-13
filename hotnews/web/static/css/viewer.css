@@ -282,6 +282,38 @@
             opacity: 0.8;
         }
 
+        /* Update indicator red dot */
+        .update-dot {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            display: none;
+            box-shadow: 0 0 0 2px white;
+        }
+
+        .update-dot.show {
+            display: block;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 2px white;
+            }
+
+            50% {
+                transform: scale(1.2);
+                box-shadow: 0 0 0 2px white, 0 0 8px rgba(239, 68, 68, 0.5);
+            }
+        }
+
         .tab-content-area {
             background: white;
             border-radius: 10px;
