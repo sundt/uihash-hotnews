@@ -2146,7 +2146,7 @@
             gap: 0;
         }
 
-        /* Red dot for new badge on icon button */
+        /* Red dot for new badge on icon button - hidden by default, shown via JS for updates */
         .new-dot {
             position: absolute;
             top: -2px;
@@ -2155,7 +2155,8 @@
             height: 8px;
             background-color: #ef4444;
             border-radius: 50%;
-            display: block;
+            display: none;
+            /* Hidden by default, JS shows when there are updates */
             border: 1px solid white;
             z-index: 10;
         }
