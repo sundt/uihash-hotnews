@@ -478,7 +478,13 @@ class NewsViewerService:
             categories[cat_id]["filtered_count"] += 1
 
         # 移除空分类
-        keep_empty = {"ai", "knowledge"}
+        # 总是保留配置的分类，即使是空的 (Always keep configured categories)
+        keep_empty = {"ai", "knowledge", "explore"}
+        if self._dynamic_categories:
+            keep_empty.update(self._dynamic_categories.keys())
+        else:
+            keep_empty.update(PLATFORM_CATEGORIES.keys())
+
         categories = {
             k: v for k, v in categories.items() 
             if (k in keep_empty) or v["news_count"] > 0 or v["filtered_count"] > 0
