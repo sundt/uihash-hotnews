@@ -113,6 +113,17 @@ def _rss_default_headers() -> Dict[str, str]:
     }
 
 
+def _rss_http_proxies() -> Optional[Dict[str, str]]:
+    """Get HTTP proxy configuration from environment variable HOTNEWS_RSS_HTTP_PROXY."""
+    try:
+        proxy = (os.environ.get("HOTNEWS_RSS_HTTP_PROXY", "") or "").strip()
+    except Exception:
+        proxy = ""
+    if not proxy:
+        return None
+    return {"http": proxy, "https": proxy}
+
+
 class UnicodeJSONResponse(Response):
     media_type = "application/json"
 
@@ -512,6 +523,7 @@ def rss_proxy_fetch_cached(url: str) -> Dict[str, Any]:
                     timeout=timeout,
                     allow_redirects=False,
                     stream=True,
+                    proxies=_rss_http_proxies(),
                 )
 
                 if resp.status_code in {301, 302, 303, 307, 308}:
@@ -728,6 +740,7 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", sc
                     timeout=timeout,
                     allow_redirects=False,
                     stream=True,
+                    proxies=_rss_http_proxies(),
                 )
 
                 if resp.status_code in {301, 302, 303, 307, 308}:
