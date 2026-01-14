@@ -155,6 +155,7 @@ class DataService:
             
             if should_fetch_rss:
                 # Use project_root from self.parser
+                print(f"DEBUG: Project Root: {self.parser.project_root}")
                 conn = get_online_db_conn(self.parser.project_root)
                 
                 # Get list of enabled RSS sources
@@ -170,14 +171,19 @@ class DataService:
                     print(f"DEBUG: Processing RSS source: {source_id} - {source_name}")
                     # Fetch entries from online.db rss_entries
                     # Use the requested 'limit' to ensure we don't truncate if user wants 50+ items
-                    cur = conn.execute("""
-                        SELECT title, link, published, summary, created_at 
-                        FROM rss_entries 
-                        WHERE source_id = ? 
-                        ORDER BY created_at DESC 
-                        LIMIT ?
-                    """, (source_id, limit))
-                    entries = cur.fetchall()
+                    try:
+                        cur = conn.execute("""
+                            SELECT title, link, published, summary, created_at 
+                            FROM rss_entries 
+                            WHERE source_id = ? 
+                            ORDER BY created_at DESC 
+                            LIMIT ?
+                        """, (source_id, limit))
+                        entries = cur.fetchall()
+                        print(f"DEBUG: Entries found: {len(entries)}")
+                    except Exception as e:
+                        print(f"DEBUG: Query Failed: {e}")
+                        entries = []
                     
                     for title, link, published, summary, created_at in entries:
                         ts_str = ""
