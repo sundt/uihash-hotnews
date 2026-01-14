@@ -95,8 +95,8 @@ subprocess.run([link, "-version"], check=True)
 PY
 # 安装依赖
 COPY requirements.txt .
-# 优先安装 CPU版 PyTorch 以大大减小体积
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# 优先安装 CPU版 PyTorch (使用清华源加速)
+RUN pip install --no-cache-dir torch torchvision torchaudio -i https://pypi.tuna.tsinghua.edu.cn/simple
 RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY docker/manage.py .
