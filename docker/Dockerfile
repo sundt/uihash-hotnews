@@ -11,9 +11,10 @@ RUN set -ex && \
     || sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/* && \
-    # Use local supercronic binary to avoid network issues
-    COPY docker/supercronic-linux-amd64 /usr/local/bin/supercronic
+    rm -rf /var/lib/apt/lists/*
+
+# Use local supercronic binary to avoid network issues
+COPY docker/supercronic-linux-amd64 /usr/local/bin/supercronic
 RUN chmod +x /usr/local/bin/supercronic
 # 安装依赖
 COPY requirements.txt .
