@@ -194,6 +194,56 @@ class DataService:
             # Silently ignore DB errors to avoid breaking the view
             pass
 
+        # [Inject Custom Source Data]
+        # Strategy: Fetch limited items per Custom source, similar to RSS
+        CUSTOM_ITEMS_PER_SOURCE = 50
+        
+        try:
+            from hotnews.web.db_online import get_online_db_conn
+            conn = get_online_db_conn(self.project_root)
+            
+            # Get enabled Custom sources
+            sources_cur = conn.execute("SELECT id, name FROM custom_sources WHERE enabled = 1")
+            custom_sources = sources_cur.fetchall()
+            
+            # Fetch top N items per Custom source
+            for source_id, source_name in custom_sources:
+                items_sql = """
+                    SELECT title, url, crawl_time
+                    FROM custom_items
+                    WHERE source_id = ?
+                    ORDER BY crawl_time DESC
+                    LIMIT ?
+                """
+                items_cur = conn.execute(items_sql, (source_id, CUSTOM_ITEMS_PER_SOURCE))
+                items = items_cur.fetchall()
+                
+                for title, url, crawl_time in items:
+                    try:
+                        # crawl_time is a string like "2026-01-14 10:30:00"
+                        ts_str = crawl_time if crawl_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    item = {
+                        "title": title,
+                        "platform": source_id,  # Use source_id directly as platform_id
+                        "platform_name": source_name or "Custom Source",
+                        "rank": 0,  # Custom sources have no rank
+                        "timestamp": ts_str
+                    }
+                    if include_url:
+                        item["url"] = url or ""
+                        item["mobileUrl"] = ""
+                    
+                    news_list.append(item)
+                    
+        except ImportError:
+            pass  # Ignore if module not found
+        except Exception as e:
+            # Silently ignore DB errors to avoid breaking the view
+            pass
+
         # Sort by timestamp (newest first), then by rank (lower is better)
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
 
