@@ -200,46 +200,60 @@ class DataService:
         
         try:
             from hotnews.web.db_online import get_online_db_conn
-            conn_online = get_online_db_conn(self.project_root)
+            import sqlite3
+            import os
             
-            # Get enabled Custom sources
+            # 1. Get enabled Custom sources from Online DB
+            conn_online = get_online_db_conn(self.parser.project_root)
             sources_cur = conn_online.execute("SELECT id, name FROM custom_sources WHERE enabled = 1")
             custom_sources = sources_cur.fetchall()
             
-            # Use the existing daily DB connection (conn) to fetch items
-            # conn is already opened at the start of get_latest_news
+            # 2. Connect to Daily News DB to fetch items
+            # We need to construct the path manually as we don't have a helper handy here
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            root = self.parser.project_root if self.parser and hasattr(self.parser, 'project_root') else '/app'
+            if not root: root = '/app'
+            db_path = f"{root}/output/{date_str}/news.db"
             
-            for source_id, source_name in custom_sources:
-                items_sql = """
-                    SELECT title, url, publish_time
-                    FROM news_items
-                    WHERE platform_id = ?
-                    ORDER BY publish_time DESC
-                    LIMIT ?
-                """
-                # conn is the daily news.db connection
-                items_cur = conn.execute(items_sql, (source_id, CUSTOM_ITEMS_PER_SOURCE))
-                items = items_cur.fetchall()
+            if os.path.exists(db_path):
+                conn_daily = sqlite3.connect(db_path)
                 
-                for title, url, publish_time in items:
+                for source_id, source_name in custom_sources:
+                    items_sql = """
+                        SELECT title, url, published_at
+                        FROM news_items
+                        WHERE platform_id = ?
+                        ORDER BY published_at DESC
+                        LIMIT ?
+                    """
+                    # Use published_at (INTEGER) which we confirmed exists in schema
                     try:
-                        # publish_time is a string like "2026-01-14 10:30:00"
-                        ts_str = publish_time if publish_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    except:
-                        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        items_cur = conn_daily.execute(items_sql, (source_id, CUSTOM_ITEMS_PER_SOURCE))
+                        items = items_cur.fetchall()
+                    except Exception:
+                        items = []
                     
-                    item = {
-                        "title": title,
-                        "platform": source_id,  # Use source_id directly as platform_id
-                        "platform_name": source_name or "Custom Source",
-                        "rank": 0,  # Custom sources have no rank
-                        "timestamp": ts_str
-                    }
-                    if include_url:
-                        item["url"] = url or ""
-                        item["mobileUrl"] = ""
-                    
-                    news_list.append(item)
+                    for title, url, published_at in items:
+                        try:
+                            # published_at is INTEGER timestamp
+                            ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
+                        except:
+                            ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        item = {
+                            "title": title,
+                            "platform": source_id,  # Use source_id directly as platform_id
+                            "platform_name": source_name or "Custom Source",
+                            "rank": 0,  # Custom sources have no rank
+                            "timestamp": ts_str
+                        }
+                        if include_url:
+                            item["url"] = url or ""
+                            item["mobileUrl"] = ""
+                        
+                        news_list.append(item)
+                
+                conn_daily.close()
                     
         except ImportError:
             pass  # Ignore if module not found
