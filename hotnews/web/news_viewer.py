@@ -87,7 +87,7 @@ PLATFORM_CATEGORIES = {
         "icon": "🔥",
         "news_limit": 10,
         "platforms": [
-            "weibo", "douyin", "bilibili-hot-search", "tieba", "hupu", "zhihu", "douban"
+            "weibo", "douyin", "bilibili-hot-search", "tieba", "zhihu", "douban"
         ]
     },
     "knowledge": {
@@ -117,7 +117,7 @@ PLATFORM_CATEGORIES = {
         "icon": "🏀",
         "news_limit": 10,
         "platforms": [
-            "nba-schedule",
+            "nba-schedule", "hupu"
         ],
     },
     "explore": {
