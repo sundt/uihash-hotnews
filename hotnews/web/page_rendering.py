@@ -237,6 +237,11 @@ async def render_viewer_page(
     if platforms:
         platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
 
+    # Load system settings first
+    from hotnews.kernel.admin.settings_admin import get_system_settings
+    sys_settings = get_system_settings(project_root)
+    items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
+
     try:
         qp = getattr(request, "query_params", None)
         e2e = str(qp.get("e2e") if qp else "").strip()
@@ -247,9 +252,10 @@ async def render_viewer_page(
         else:
             data = viewer_service.get_categorized_news(
                 platforms=platform_list,
-                limit=5000,
+                limit=10000,
                 apply_filter=True,
                 filter_mode=filter,
+                per_platform_limit=sys_settings.get("display", {}).get("items_per_card", 20)
             )
 
         data = _inject_explore_category(data)
@@ -265,10 +271,10 @@ async def render_viewer_page(
 
         asset_rev = _get_asset_rev(project_root)
 
-        # Load system settings
-        from hotnews.kernel.admin.settings_admin import get_system_settings
-        sys_settings = get_system_settings(project_root)
-        items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
+        # Load system settings (moved up)
+        # from hotnews.kernel.admin.settings_admin import get_system_settings
+        # sys_settings = get_system_settings(project_root)
+        # items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
 
         resp = templates.TemplateResponse(
             "viewer.html",

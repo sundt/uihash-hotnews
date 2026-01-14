@@ -31,7 +31,8 @@ class DataService:
         self,
         platforms: Optional[List[str]] = None,
         limit: int = 50,
-        include_url: bool = False
+        include_url: bool = False,
+        per_platform_limit: int = 50
     ) -> List[Dict]:
         """
         获取最新一批爬取的新闻数据
@@ -48,7 +49,7 @@ class DataService:
             DataNotFoundError: 数据不存在
         """
         # 尝试从缓存获取
-        cache_key = f"latest_news:{','.join(platforms or [])}:{limit}:{include_url}"
+        cache_key = f"latest_news:{','.join(platforms or [])}:{limit}:{include_url}:{per_platform_limit}"
         cached = self.cache.get(cache_key, ttl=300)  # 5分钟缓存
         if cached:
             return cached
@@ -327,6 +328,30 @@ class DataService:
 
         # Sort by timestamp (newest first), then by rank (lower is better)
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
+
+        # [Balanced Slicing]
+        # Instead of just taking top N globally, we first take top K from each platform.
+        # This ensures low-frequency sources (RSS) are not drowned out by high-frequency ones (NewsNow).
+        
+        balanced_list = []
+        if per_platform_limit > 0:
+            from collections import defaultdict
+            platform_groups = defaultdict(list)
+            for item in news_list:
+                pid = item.get("platform")
+                if pid:
+                    platform_groups[pid].append(item)
+            
+            # For each platform, take top K
+            for pid, items in platform_groups.items():
+                # items are already sorted by time globally, so taking first K gives top K newest
+                balanced_list.extend(items[:per_platform_limit])
+            
+            # Re-sort the balanced list globally by time
+            balanced_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
+            news_list = balanced_list
+
+        # Apply limit to final result
 
         # Apply limit to final result
         # Now with per-source RSS limits, NewsNow data won't be completely displaced

@@ -585,7 +585,8 @@ class NewsViewerService:
         platforms: Optional[List[str]] = None,
         limit: int = 500,
         apply_filter: bool = True,
-        filter_mode: Optional[str] = None
+        filter_mode: Optional[str] = None,
+        per_platform_limit: int = 50
     ) -> Dict:
         """
         获取分类后的新闻
@@ -595,6 +596,7 @@ class NewsViewerService:
             limit: 最大新闻数量
             apply_filter: 是否应用内容过滤
             filter_mode: 临时覆盖过滤模式
+            per_platform_limit: 每个平台的最大新闻数量
 
         Returns:
             分类后的新闻数据
@@ -602,7 +604,7 @@ class NewsViewerService:
         global _categorized_news_cache, _categorized_news_cache_time
         
         # 构建缓存键
-        cache_key = f"{','.join(platforms or [])}:{limit}:{apply_filter}:{filter_mode or ''}"
+        cache_key = f"{','.join(platforms or [])}:{limit}:{apply_filter}:{filter_mode or ''}:{per_platform_limit}"
         
         # 检查缓存是否有效
         now = time.time()
@@ -621,7 +623,8 @@ class NewsViewerService:
                 news_list = self.data_service.get_latest_news(
                     platforms=platforms,
                     limit=limit,
-                    include_url=True
+                    include_url=True,
+                    per_platform_limit=per_platform_limit
                 )
             else:
                 # 如果没有数据服务，返回空数据

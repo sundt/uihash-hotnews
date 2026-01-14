@@ -90,9 +90,9 @@ from hotnews.web.rss_proxy import rss_proxy_fetch_cached, rss_proxy_fetch_warmup
 from hotnews.web import page_rendering
 from hotnews.web.misc_routes import router as _misc_router
 from hotnews.web.online_routes import router as _online_router
-from hotnews.web.viewer_controls_routes import router as _viewer_controls_router
-from hotnews.web.fetch_metrics_routes import router as _fetch_metrics_router
-from hotnews.web.system_routes import router as _system_router
+from hotnews.kernel.admin.platform_admin import router as platform_admin_router
+from hotnews.kernel.admin.settings_admin import router as settings_admin_router, get_system_settings
+from hotnews.kernel.rss.rss_admin import router as rss_admin_router
 from hotnews.web.user_db import (
     create_user_with_cookie_identity,
     get_user_db_conn,
@@ -2141,11 +2141,16 @@ async def api_news(
     if platforms:
         platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
     
+    # Load system settings for per_platform_limit
+    sys_settings = get_system_settings(project_root)
+    items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
+
     data = viewer_service.get_categorized_news(
         platforms=platform_list,
         limit=limit,
         apply_filter=True,
-        filter_mode=filter_mode
+        filter_mode=filter_mode,
+        per_platform_limit=items_per_card
     )
 
     try:
@@ -2737,11 +2742,16 @@ async def _warmup_cache():
         
         # 预加载新闻数据到缓存
         viewer_service, _ = get_services()
+        # Load settings
+        sys_settings = get_system_settings(project_root)
+        items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
+
         viewer_service.get_categorized_news(
             platforms=None,
             limit=10000,
             apply_filter=True,
-            filter_mode=None
+            filter_mode=None,
+            per_platform_limit=items_per_card
         )
         
         elapsed = time.time() - start_time
