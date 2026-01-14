@@ -128,9 +128,7 @@ class DataService:
                 news_list.append(news_item)
 
         # [Inject RSS Data]
-        # Strategy: Fetch limited items per RSS source to balance coverage and performance
-        # Without limit, we'd fetch 24K+ RSS items which would displace NewsNow data
-        RSS_ITEMS_PER_SOURCE = 50  # Limit per RSS source to keep total reasonable
+        # Strategy: Fetch items per RSS source up to the requested limit
         
         try:
             from hotnews.web.db_online import get_online_db_conn
@@ -153,55 +151,70 @@ class DataService:
                 
                 # Get list of enabled RSS sources
                 if rss_source_filter:
-                    placeholders = ",".join(["?"] * len(rss_source_filter))
-                    sources_sql = f"SELECT id, name FROM rss_sources WHERE enabled = 1 AND id IN ({placeholders})"
-                    sources_cur = conn.execute(sources_sql, tuple(rss_source_filter))
+                    placeholders = ','.join(['?'] * len(rss_source_filter))
+                    cur = conn.execute(f"SELECT id, name FROM rss_sources WHERE enabled = 1 AND id IN ({placeholders})", rss_source_filter)
                 else:
-                    sources_cur = conn.execute("SELECT id, name FROM rss_sources WHERE enabled = 1")
+                    cur = conn.execute("SELECT id, name FROM rss_sources WHERE enabled = 1")
                 
-                sources = sources_cur.fetchall()
+                rss_sources = cur.fetchall()
                 
-                # Fetch top N items per source
-                for source_id, source_name in sources:
-                    entries_sql = """
-                        SELECT e.title, e.url, e.published_at 
-                        FROM rss_entries e 
-                        WHERE e.source_id = ?
-                        ORDER BY e.published_at DESC 
+                for source_id, source_name in rss_sources:
+                    # Fetch entries from online.db rss_entries
+                    # Use the requested 'limit' to ensure we don't truncate if user wants 50+ items
+                    cur = conn.execute("""
+                        SELECT title, link, published, summary, created_at 
+                        FROM rss_entries 
+                        WHERE source_id = ? 
+                        ORDER BY created_at DESC 
                         LIMIT ?
-                    """
-                    entries_cur = conn.execute(entries_sql, (source_id, RSS_ITEMS_PER_SOURCE))
-                    entries = entries_cur.fetchall()
+                    """, (source_id, limit))
+                    entries = cur.fetchall()
                     
-                    for title, url, pub in entries:
-                        rss_pid = f"rss-{source_id}"
-                        try:
-                            ts_str = datetime.fromtimestamp(pub).strftime("%Y-%m-%d %H:%M:%S")
-                        except:
-                            ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    for title, link, published, summary, created_at in entries:
+                        ts_str = ""
+                        # Try to parse published date
+                        if published:
+                            try:
+                                # Try common formats
+                                for fmt in ["%a, %d %b %Y %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"]:
+                                    try:
+                                         dt = datetime.strptime(published, fmt)
+                                         ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                                         break
+                                    except:
+                                        pass
+                            except:
+                                pass
+                        
+                        if not ts_str and created_at:
+                            ts_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
                             
+                        # Fallback to now
+                        if not ts_str:
+                             ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                             
                         item = {
                             "title": title,
-                            "platform": rss_pid,
-                            "platform_name": source_name or "RSS Source",
-                            "rank": 0,  # RSS has no rank
-                            "timestamp": ts_str
+                            "platform": f"rss-{source_id}",
+                            "platform_name": source_name,
+                            "rank": 0,
+                            "timestamp": ts_str,
+                            "summary": summary or ""
                         }
                         if include_url:
-                            item["url"] = url
-                            item["mobileUrl"] = ""
+                            item["url"] = link
+                            item["mobileUrl"] = link
                             
                         news_list.append(item)
-                    
+
         except ImportError:
-            pass  # Ignore if module not found
+            pass
         except Exception as e:
             # Silently ignore DB errors to avoid breaking the view
             pass
 
         # [Inject Custom Source Data]
-        # Strategy: Fetch limited items per Custom source, similar to RSS
-        CUSTOM_ITEMS_PER_SOURCE = 50
+        # Strategy: Fetch items per Custom source up to the requested limit
         
         try:
             from hotnews.web.db_online import get_online_db_conn
@@ -232,9 +245,9 @@ class DataService:
                         ORDER BY last_crawl_time DESC
                         LIMIT ?
                     """
-                    # Use published_at (INTEGER) which we confirmed exists in schema
+                    # Use the requested 'limit' instead of fixed 50
                     try:
-                        items_cur = conn_daily.execute(items_sql, (source_id, CUSTOM_ITEMS_PER_SOURCE))
+                        items_cur = conn_daily.execute(items_sql, (source_id, limit))
                         items = items_cur.fetchall()
                     except Exception:
                         items = []
