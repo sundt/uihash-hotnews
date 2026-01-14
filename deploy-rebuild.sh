@@ -38,14 +38,13 @@ echo "✅ Pushed to origin/main"
 echo ">>> Step 3: Remote Rebuild on ${SERVER_HOST}..."
 
 # We execute the remote commands in a single ssh session for atomicity
-# But first, upload the local supercronic binary to speed up build
-echo ">>> Uploading helper binaries..."
-scp -P "${SERVER_PORT}" docker/supercronic-linux-amd64 "${SERVER_USER}@${SERVER_HOST}:${SERVER_PROJECT_ROOT}/docker/"
-
 ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     set -e
     echo "   [Remote] cd ${SERVER_PROJECT_ROOT}..."
     cd ${SERVER_PROJECT_ROOT}
+    
+    # Ensure no binary conflict (remove untracked one if exists)
+    rm -f docker/supercronic-linux-amd64
     
     echo "   [Remote] git pull..."
     git pull origin main
