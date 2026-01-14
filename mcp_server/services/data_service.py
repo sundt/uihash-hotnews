@@ -76,6 +76,14 @@ class DataService:
              # If parser fails (no data found), we ignore and proceed to try fetching RSS/Custom data
              pass
 
+        # Strict Filter: Ensure all_titles only contains requested platforms
+        # This prevents parser from returning "everything" or "cached default" when we only wanted RSS/Custom
+        if platforms is not None:
+             valid_keys = set(platforms)
+             all_titles = {k: v for k, v in all_titles.items() if k in valid_keys}
+             # Sync auxiliary dicts
+             id_to_name = {k: v for k, v in id_to_name.items() if k in all_titles}
+
         # 获取最新的文件时间
         if timestamps:
             latest_timestamp = max(timestamps.values())
