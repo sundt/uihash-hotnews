@@ -187,7 +187,7 @@ def resolve_and_validate_host(host: str) -> None:
             raise ValueError("Blocked resolved IP")
 
 
-def validate_http_url(raw_url: str) -> str:
+def validate_http_url(raw_url: str, check_resolve: bool = True) -> str:
     u = (raw_url or "").strip()
     if not u:
         raise ValueError("Missing url")
@@ -198,7 +198,8 @@ def validate_http_url(raw_url: str) -> str:
         raise ValueError("Invalid url")
     if parsed.username or parsed.password:
         raise ValueError("Invalid url")
-    resolve_and_validate_host(parsed.hostname or "")
+    if check_resolve:
+        resolve_and_validate_host(parsed.hostname or "")
     return u
 
 
@@ -721,7 +722,7 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", sc
         cur_etag = (etag or "").strip()
         cur_lm = (last_modified or "").strip()
         while True:
-            current_url = validate_http_url(current_url)
+            current_url = validate_http_url(current_url, check_resolve=not use_scraperapi)
             rss_host_rate_limit_sleep(host0)
 
             headers = _rss_default_headers()
