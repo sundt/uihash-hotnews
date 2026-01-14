@@ -219,11 +219,12 @@ class DataService:
                 conn_daily = sqlite3.connect(db_path)
                 
                 for source_id, source_name in custom_sources:
+                    # Fetch last_crawl_time as well to use as fallback/primary sort
                     items_sql = """
-                        SELECT title, url, published_at
+                        SELECT title, url, published_at, last_crawl_time
                         FROM news_items
                         WHERE platform_id = ?
-                        ORDER BY published_at DESC
+                        ORDER BY last_crawl_time DESC
                         LIMIT ?
                     """
                     # Use published_at (INTEGER) which we confirmed exists in schema
@@ -233,12 +234,23 @@ class DataService:
                     except Exception:
                         items = []
                     
-                    for title, url, published_at in items:
-                        try:
-                            # published_at is INTEGER timestamp
-                            ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
-                        except:
-                            ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    for title, url, published_at, last_crawl_time in items:
+                        ts_str = ""
+                        
+                        # 1. Try published_at if it looks valid (e.g. year > 2000)
+                        if published_at and isinstance(published_at, int) and published_at > 946684800:
+                            try:
+                                ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
+                            except:
+                                pass
+                        
+                        # 2. Fallback to last_crawl_time (string)
+                        if not ts_str and last_crawl_time:
+                            ts_str = str(last_crawl_time)
+                            
+                        # 3. Final fallback to now
+                        if not ts_str:
+                             ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         item = {
                             "title": title,
