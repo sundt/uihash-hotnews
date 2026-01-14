@@ -79,11 +79,8 @@ class DataService:
         # Strict Filter: Ensure all_titles only contains requested platforms
         # This prevents parser from returning "everything" or "cached default" when we only wanted RSS/Custom
         if platforms is not None:
-             print(f"DEBUG: Strict Filter active. Platforms: {platforms}")
-             print(f"DEBUG: Before filter, all_titles keys: {list(all_titles.keys())[:5]}")
              valid_keys = set(platforms)
              all_titles = {k: v for k, v in all_titles.items() if k in valid_keys}
-             print(f"DEBUG: After filter, all_titles keys: {list(all_titles.keys())}")
              # Sync auxiliary dicts
              id_to_name = {k: v for k, v in id_to_name.items() if k in all_titles}
 
@@ -138,9 +135,6 @@ class DataService:
 
                 news_list.append(news_item)
                 
-        print(f"DEBUG: news_list size after Main Data: {len(news_list)}")
-        if len(news_list) > 0: print(f"DEBUG: Sample: {news_list[0].get('platform')}")
-
         # [Inject RSS Data]
         # Strategy: Fetch items per RSS source up to the requested limit
         
@@ -226,8 +220,7 @@ class DataService:
         except Exception as e:
             # Silently ignore DB errors to avoid breaking the view
             pass
-            
-        print(f"DEBUG: news_list size after RSS: {len(news_list)}")
+
 
         # [Inject Custom Source Data]
         # Strategy: Fetch items per Custom source up to the requested limit
@@ -241,6 +234,11 @@ class DataService:
             conn_online = get_online_db_conn(self.parser.project_root)
             sources_cur = conn_online.execute("SELECT id, name FROM custom_sources WHERE enabled = 1")
             custom_sources = sources_cur.fetchall()
+            
+            # Strict Filter: If specific platforms requested, filter custom sources
+            if platforms is not None:
+                requested_ids = set(platforms)
+                custom_sources = [s for s in custom_sources if s[0] in requested_ids]
             
             # 2. Connect to Daily News DB to fetch items
             # We need to construct the path manually as we don't have a helper handy here
@@ -322,7 +320,6 @@ class DataService:
             # Silently ignore DB errors to avoid breaking the view
             pass
 
-        print(f"DEBUG: news_list size after Custom: {len(news_list)}")
 
         # Sort by timestamp (newest first), then by rank (lower is better)
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
