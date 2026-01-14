@@ -60,7 +60,7 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     # Wait for container to be ready
     sleep 5
     docker cp ../scripts/migrate_add_use_scraperapi.py hotnews-viewer:/tmp/migrate_db.py
-    docker exec hotnews-viewer python /tmp/migrate_db.py
+    docker exec hotnews-viewer python /tmp/migrate_db.py /app/output/online.db
     
     echo "   ✅ Remote steps completed."
 EOF
