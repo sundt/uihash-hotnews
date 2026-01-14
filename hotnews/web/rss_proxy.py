@@ -705,7 +705,7 @@ def rss_proxy_cache_get_any_ttl(url: str, ttl: int) -> Optional[Dict[str, Any]]:
     return cached if isinstance(cached, dict) else None
 
 
-def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", scrape_rules: str = "") -> Dict[str, Any]:
+def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", scrape_rules: str = "", use_scraperapi: bool = False) -> Dict[str, Any]:
     cache = get_cache()
     key = f"rssproxy:{_md5_hex(url)}"
 
@@ -734,8 +734,18 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", sc
             resp = None
             try:
                 timeout = _rss_http_timeouts()
+                
+                # Use ScraperAPI if enabled and API key is available
+                request_url = current_url
+                if use_scraperapi:
+                    scraper_api_key = os.environ.get("SCRAPERAPI_KEY", "").strip()
+                    if scraper_api_key:
+                        # Route through ScraperAPI
+                        request_url = f"http://api.scraperapi.com?api_key={scraper_api_key}&url={current_url}"
+                        logger.info(f"Using ScraperAPI for RSS feed: {current_url}")
+                
                 resp = requests.get(
-                    current_url,
+                    request_url,
                     headers=headers,
                     timeout=timeout,
                     allow_redirects=False,

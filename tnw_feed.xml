@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+>
+<channel>
+	<title>The Next Web</title>
+	<atom:link href="https://thenextweb.com/feed" rel="self" type="application/rss+xml" />
+	<link>https://thenextweb.com</link>
+	<description>Original and proudly opinionated perspectives for Generation T</description>
+	<lastBuildDate>Wed, 14 Jan 2026 01:48:32 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>hourly</sy:updatePeriod>
+	<sy:updateFrequency>1</sy:updateFrequency>
+    <generator>TNW-API</generator>
+<item>
+	<title>When shopping stops being a place</title>
+	<link>https://thenextweb.com/news/jd-sports-brings-ai-shopping</link>
+	<pubDate>Tue, 13 Jan 2026 11:41:45 +0000</pubDate>
+		<dc:creator><![CDATA[Ana-Maria Stanciuc]]></dc:creator>
+			<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<category><![CDATA[Media]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415175</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FJD-Sports-AI-shopping.png&signature=daeacdaeab99e61ff8ce24c17a6e3fc9" width="796" height="417"><br />For years, online shopping followed a fixed path. Search bar, product grid, filters, checkout. The interface barely changed, even as everything else on the internet did. That path is now breaking. Monday 12 January, 2026, JD Sports Fashion plc (JD Group) became one of the first large retailers to let US customers search and buy sneakers directly inside AI chatbots, including ChatGPT, Microsoft Copilot, and Google Gemini. No website visit. No app. Just a conversation that ends with a payment. Basically, a customer can chat with an AI bot, say “add these shoes to my cart,” and complete a purchase in&#8230;<br /><br /><a href="https://thenextweb.com/news/jd-sports-brings-ai-shopping?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FJD-Sports-AI-shopping.png&amp;signature=daeacdaeab99e61ff8ce24c17a6e3fc9" type="image/png" length="0" />
+</item>
+<item>
+	<title>AI Skills</title>
+	<link>https://thenextweb.com/news/ai-skills</link>
+	<pubDate>Mon, 12 Jan 2026 19:55:05 +0000</pubDate>
+		<dc:creator><![CDATA[Alexandru Stan]]></dc:creator>
+			<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415170</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FTNW-wallpaper.png&signature=b25e3901422f8b838824f846082bab3d" width="796" height="417"><br />For the past few years, artificial intelligence has been discussed almost exclusively in terms of models. Bigger models, faster models, smarter models. More recently, the focus shifted to agents, systems capable of planning, reasoning, and acting autonomously. Yet the real leap in usefulness does not happen at the model level, nor at the agent level. It happens one layer above, at the level of Skills. If models represent intelligence and agents represent coordination, Skills are where AI becomes operational and valuable in the real world. A Skill is not a prompt. It is not a chatbot. And not an agent.&#8230;<br /><br /><a href="https://thenextweb.com/news/ai-skills?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FTNW-wallpaper.png&amp;signature=b25e3901422f8b838824f846082bab3d" type="image/png" length="0" />
+</item>
+<item>
+	<title>AI is old news. Generative AI is the future.</title>
+	<link>https://thenextweb.com/news/generative-ai-is-the-future</link>
+	<pubDate>Sat, 10 Jan 2026 11:12:17 +0000</pubDate>
+		<dc:creator><![CDATA[Viviane Mendes]]></dc:creator>
+			<category><![CDATA[Insider]]></category>
+		<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415161</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FGenerative-AI-is-the-future.png&signature=3068d46d16c67d9144462a03d38ec741" width="796" height="417"><br />The term Artificial Intelligence (AI) is well known, often evoking futuristic movies like Robocop, Terminator and The Matrix. Yet what many don’t realize is that AI has been part of our lives for decades. When you finish watching a movie on a streaming platform and instantly see recommendations for similar content, that’s AI. When you’re shopping online and an entire page of suggested products appears, that’s AI. Even the digital ads you see are powered by machine-learning algorithms designed to optimize engagement, clicks, and conversions. Companies have relied on AI rule-based automation, routines, and machine-learning algorithms for years to power their systems and business processes. So&#8230;<br /><br /><a href="https://thenextweb.com/news/generative-ai-is-the-future?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FGenerative-AI-is-the-future.png&amp;signature=3068d46d16c67d9144462a03d38ec741" type="image/png" length="0" />
+</item>
+<item>
+	<title>Are Tech giants killing cold outreach?</title>
+	<link>https://thenextweb.com/news/are-tech-giants-killing-cold-outreach</link>
+	<pubDate>Fri, 09 Jan 2026 16:03:56 +0000</pubDate>
+		<dc:creator><![CDATA[Cezar Nitulescu]]></dc:creator>
+			<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415149</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2Fcold-outreach-1.png&signature=ff5f540d75e0f63faac38c7f95cbada7" width="796" height="417"><br />This is one of the most concerning questions for sales teams at the beginning of 2026: are tech giants killing cold outreach? The answer is that we do not know yet, but here is a perspective from someone working in sales. Apple and Google have recently introduced two features that show a clear tendency toward the decline of cold outreach. Apple’s new feature, “Ask Reason for Calling,” is a game changer. It effectively turns cold calling into another form of messaging. No more dynamism, no element of surprise, no offhandedness. Human touch is at the core of sales, but how&#8230;<br /><br /><a href="https://thenextweb.com/news/are-tech-giants-killing-cold-outreach?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2Fcold-outreach-1.png&amp;signature=ff5f540d75e0f63faac38c7f95cbada7" type="image/png" length="0" />
+</item>
+<item>
+	<title>ChatGPT Health has arrived</title>
+	<link>https://thenextweb.com/news/chatgpt-health-has-arrived</link>
+	<pubDate>Thu, 08 Jan 2026 12:30:42 +0000</pubDate>
+		<dc:creator><![CDATA[Ana-Maria Stanciuc]]></dc:creator>
+			<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415133</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FOpenAI-launches-ChatGPT-Health.png&signature=0307de6781b50c9f1dffb51ff5d7d0dd" width="796" height="417"><br />I’ve said this many times: the products we see on the market are rarely visionary leaps. Most of the time, they are mirrors. They reflect people’s habits, shortcuts, fears, and small daily behaviours. Design follows behaviour. Always has. Think about it. You probably know at least one person who already uses ChatGPT for health-related questions. Not occasionally. Regularly. As a second opinion. As a place to test concerns before saying them out loud. Sometimes even as a therapist, a confidant, or a space where embarrassment does not exist. When habits become consistent, companies stop observing and start building. At that&#8230;<br /><br /><a href="https://thenextweb.com/news/chatgpt-health-has-arrived?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FOpenAI-launches-ChatGPT-Health.png&amp;signature=0307de6781b50c9f1dffb51ff5d7d0dd" type="image/png" length="0" />
+</item>
+<item>
+	<title>Who decides the best AI?</title>
+	<link>https://thenextweb.com/news/lmarena-raises-150m-in-series-a-round</link>
+	<pubDate>Wed, 07 Jan 2026 12:10:04 +0000</pubDate>
+		<dc:creator><![CDATA[Ana-Maria Stanciuc]]></dc:creator>
+			<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<category><![CDATA[Media]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415128</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FLMArena-raises-150M.png&signature=45222642cdb67ab68e22e758e9ebb1bb" width="796" height="417"><br />The AI industry has become adept at measuring itself. Benchmarks improve, model scores rise, and every new release arrives with a list of metrics meant to signal progress. And yet, somewhere between the lab and real life, something keeps slipping. Which model actually feels better to use? Which answers would a human trust? Which system would you put in front of customers, employees, or citizens and feel comfortable standing behind it? That gap is where LMArena has quietly built its business, and why investors just put $150 million behind it at a $1.7 billion valuation, in a Series A round.&#8230;<br /><br /><a href="https://thenextweb.com/news/lmarena-raises-150m-in-series-a-round?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FLMArena-raises-150M.png&amp;signature=45222642cdb67ab68e22e758e9ebb1bb" type="image/png" length="0" />
+</item>
+<item>
+	<title>Big stages, smaller impact.</title>
+	<link>https://thenextweb.com/news/tech-industry-events</link>
+	<pubDate>Tue, 06 Jan 2026 12:45:16 +0000</pubDate>
+		<dc:creator><![CDATA[Alexandru Stan]]></dc:creator>
+			<category><![CDATA[Insider]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415123</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FTech-industry-events.png&signature=923497e8657fc6b9bda0aa80c13ad504" width="796" height="417"><br />For years, the tech industry equated success with scale. Bigger stages, larger crowds, more logos, more panels, more noise. Five thousand people became ten thousand. Ten thousand became the goal. Somewhere along the way, that stopped making sense. Founders and executives didn’t announce a boycott. They simply stopped showing up. What we see today is not a rejection of events, but a correction in how people who actually run companies choose to spend their time. The shift is subtle, but consistent. Fewer large conferences. More small, curated gatherings. More closed rooms. More dinners. More tables of twelve. Big tech events&#8230;<br /><br /><a href="https://thenextweb.com/news/tech-industry-events?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FTech-industry-events.png&amp;signature=923497e8657fc6b9bda0aa80c13ad504" type="image/png" length="0" />
+</item>
+<item>
+	<title>Five stars, Zero trust</title>
+	<link>https://thenextweb.com/news/review-economy</link>
+	<pubDate>Fri, 02 Jan 2026 16:23:38 +0000</pubDate>
+		<dc:creator><![CDATA[Alexandru Stan]]></dc:creator>
+			<category><![CDATA[Insider]]></category>
+		<category><![CDATA[Opinion]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415120</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FReview-economy.png&signature=12450118563b6166374be2110cfd6b6c" width="796" height="417"><br />Five stars used to mean something. People still read reviews before buying software. They just don’t trust them the way they used to. And no, this isn’t about fake reviews or obvious scams. Those are easy to spot. The real problem is more uncomfortable. The review economy didn’t collapse. It slowly drifted away from its original purpose. User reviews began as authentic buyer guidance, but they’ve morphed into strategic assets for businesses. Scroll through any app store or e-commerce site: everything is “top-rated” and lavished with praise. If every product gleams with a 4.8/5 rating, those stars start to lose&#8230;<br /><br /><a href="https://thenextweb.com/news/review-economy?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2026%2F01%2FReview-economy.png&amp;signature=12450118563b6166374be2110cfd6b6c" type="image/png" length="0" />
+</item>
+<item>
+	<title>A 2025 recap for Tech &#038; AI</title>
+	<link>https://thenextweb.com/news/a-2025-recap-for-tech-ai</link>
+	<pubDate>Wed, 31 Dec 2025 10:28:33 +0000</pubDate>
+		<dc:creator><![CDATA[Ana-Maria Stanciuc]]></dc:creator>
+			<category><![CDATA[Insider]]></category>
+		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415111</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2025%2F12%2FA-2025.png&signature=6fd2da00bbb01d4df738c148b34e7558" width="796" height="417"><br />2025 was the year technology stopped being tomorrow’s promise and became today’s anchor. What began as a surge in generative AI and platform innovation two years prior crystallized this year into concrete shifts in how people work, governing bodies legislate, and markets invest. Across continents and industries, the arc of technology bent toward practical impact, regulatory reality, and economic weight! At the heart of the year’s story was artificial intelligence’s jump from novelty to infrastructure. LLMs and multimodal models moved beyond demos into everyday workflows, influencing how documents are written, campaigns are conceived, products designed, and code generated. Enterprises that&#8230;<br /><br /><a href="https://thenextweb.com/news/a-2025-recap-for-tech-ai?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2025%2F12%2FA-2025.png&amp;signature=6fd2da00bbb01d4df738c148b34e7558" type="image/png" length="0" />
+</item>
+<item>
+	<title>A New Era for TNW.</title>
+	<link>https://thenextweb.com/news/a-new-era-for-tnw</link>
+	<pubDate>Mon, 22 Dec 2025 18:32:12 +0000</pubDate>
+		<dc:creator><![CDATA[Alexandru Stan]]></dc:creator>
+			<category><![CDATA[Insider]]></category>
+		<category><![CDATA[Next Featured]]></category>
+		<category><![CDATA[Media]]></category>
+		<guid isPermaLink="false">TheNextWeb=1415096</guid>
+	<description><![CDATA[<img src="https://img-cdn.tnwcdn.com/image?fit=796%2C417&url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2025%2F12%2FGVD_8323.jpg&signature=e3f8825f5872a8a36d25a8713444c733" width="796" height="417"><br />My name is Alexandru Stan, and this article continues the dialogue I began following the acquisition of TNW. Following the recent transaction, TNW Spaces remains with the Financial Times, while we continue the mission of the website, the events, and the global community. We already have a dedicated team at tekpon operating the platform, events, and community initiatives. Our objective is to expand and strengthen the team as TNW accelerates its next chapter. TNW is already a global media platform with millions of readers. We’re not starting over. We are building forward. Why TNW matters today Technology is entering a&#8230;<br /><br /><a href="https://thenextweb.com/news/a-new-era-for-tnw?utm_source=social&#038;utm_medium=feed&#038;utm_campaign=profeed">This story continues</a> at The Next Web]]></description>
+	<enclosure url="https://img-cdn.tnwcdn.com/image?fit=796%2C417&amp;url=https%3A%2F%2Fcdn0.tnwcdn.com%2Fwp-content%2Fblogs.dir%2F1%2Ffiles%2F2025%2F12%2FGVD_8323.jpg&amp;signature=e3f8825f5872a8a36d25a8713444c733" type="image/jpeg" length="0" />
+</item>
+</channel>
+</rss>
