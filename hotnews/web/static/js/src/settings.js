@@ -158,9 +158,24 @@ export const settings = {
             categoryFilters: userConfig.categoryFilters || {}
         };
 
-        Object.keys(_defaultCategories).forEach(catId => {
+        // Get server's category order (already sorted by sort_order from backend)
+        const serverOrder = Object.keys(_defaultCategories);
+
+        // Insert missing categories at their proper position based on server order
+        serverOrder.forEach((catId, serverIndex) => {
             if (!merged.categoryOrder.includes(catId)) {
-                merged.categoryOrder.push(catId);
+                // Find the best position: after the last server category that exists in user order
+                // and appears before this one in server order
+                let insertIndex = merged.categoryOrder.length; // default: end
+                for (let i = serverIndex - 1; i >= 0; i--) {
+                    const prevCatId = serverOrder[i];
+                    const prevUserIndex = merged.categoryOrder.indexOf(prevCatId);
+                    if (prevUserIndex !== -1) {
+                        insertIndex = prevUserIndex + 1;
+                        break;
+                    }
+                }
+                merged.categoryOrder.splice(insertIndex, 0, catId);
             }
         });
 
@@ -245,23 +260,22 @@ export const settings = {
             newBadge.style.display = 'none';
             localStorage.setItem('category_settings_badge_dismissed', 'true');
         }
-        if (!_defaultCategories || Object.keys(_defaultCategories).length === 0) {
-            try {
-                const response = await fetch('/api/news');
-                const data = await response.json();
-                if (data?.categories) {
-                    _defaultCategories = {};
-                    _allPlatforms = {};
-                    Object.entries(data.categories).forEach(([catId, cat]) => {
-                        _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
-                        Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
-                            _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
-                        });
+        // Always fetch fresh categories to ensure admin-added categories appear
+        try {
+            const response = await fetch('/api/news');
+            const data = await response.json();
+            if (data?.categories) {
+                _defaultCategories = {};
+                _allPlatforms = {};
+                Object.entries(data.categories).forEach(([catId, cat]) => {
+                    _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
+                    Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                        _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
                     });
-                }
-            } catch (e) {
-                console.error('Failed to fetch categories:', e);
+                });
             }
+        } catch (e) {
+            console.error('Failed to fetch categories:', e);
         }
         const modal = document.getElementById('categorySettingsModal');
         modal.classList.add('show');
