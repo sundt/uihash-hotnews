@@ -2131,7 +2131,7 @@ async def api_news_check_updates():
 async def api_news(
     request: Request,
     platforms: Optional[str] = Query(None),
-    limit: int = Query(5000, ge=1, le=10000),
+    limit: int = Query(10000, ge=1, le=20000),
     filter_mode: Optional[str] = Query(None)
 ):
     """API: 获取分类新闻数据（JSON格式）"""
@@ -2739,7 +2739,7 @@ async def _warmup_cache():
         viewer_service, _ = get_services()
         viewer_service.get_categorized_news(
             platforms=None,
-            limit=5000,
+            limit=10000,
             apply_filter=True,
             filter_mode=None
         )
