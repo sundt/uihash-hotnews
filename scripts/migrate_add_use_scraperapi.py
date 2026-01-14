@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Migration: Add use_scraperapi column to rss_sources table
+Migration: Add use_scraperapi column to rss_sources and custom_sources tables
 """
 import sqlite3
 import sys
@@ -10,16 +10,26 @@ def migrate(db_path: str):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     
-    # Check if column already exists
+    # Migrate rss_sources
     cur.execute("PRAGMA table_info(rss_sources)")
-    columns = [row[1] for row in cur.fetchall()]
+    rss_columns = [row[1] for row in cur.fetchall()]
     
-    if 'use_scraperapi' in columns:
+    if 'use_scraperapi' not in rss_columns:
+        print("Adding 'use_scraperapi' column to rss_sources table...")
+        cur.execute("ALTER TABLE rss_sources ADD COLUMN use_scraperapi INTEGER NOT NULL DEFAULT 0")
+    else:
         print("Column 'use_scraperapi' already exists in rss_sources table")
-        return
     
-    print("Adding 'use_scraperapi' column to rss_sources table...")
-    cur.execute("ALTER TABLE rss_sources ADD COLUMN use_scraperapi INTEGER NOT NULL DEFAULT 0")
+    # Migrate custom_sources
+    cur.execute("PRAGMA table_info(custom_sources)")
+    custom_columns = [row[1] for row in cur.fetchall()]
+    
+    if 'use_scraperapi' not in custom_columns:
+        print("Adding 'use_scraperapi' column to custom_sources table...")
+        cur.execute("ALTER TABLE custom_sources ADD COLUMN use_scraperapi INTEGER NOT NULL DEFAULT 0")
+    else:
+        print("Column 'use_scraperapi' already exists in custom_sources table")
+    
     conn.commit()
     print("Migration completed successfully")
     conn.close()
