@@ -54,22 +54,27 @@ class DataService:
             return cached
 
         # 读取今天的数据；如果今天没有数据，则回退到最近可用日期
+        all_titles = {}
+        id_to_name = {}
+        timestamps = {}
+        fetch_time = datetime.now()
+        
         try:
-            all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
-                date=None,
-                platform_ids=platforms
-            )
-        except DataNotFoundError:
-            _, latest = self.get_available_date_range()
-            if latest is None:
-                raise DataNotFoundError(
-                    "暂无新闻数据",
-                    suggestion="请先运行爬虫或稍后再试"
+            try:
+                all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
+                    date=None,
+                    platform_ids=platforms
                 )
-            all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
-                date=latest,
-                platform_ids=platforms
-            )
+            except DataNotFoundError:
+                _, latest = self.get_available_date_range()
+                if latest is not None:
+                     all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
+                        date=latest,
+                        platform_ids=platforms
+                    )
+        except Exception:
+             # If parser fails (no data found), we ignore and proceed to try fetching RSS/Custom data
+             pass
 
         # 获取最新的文件时间
         if timestamps:
