@@ -128,3 +128,10 @@ uv.lock
 # Deployment Scripts
 deploy-*.sh
 rebuild_only.sh
+
+# Node.js / Testing (Local Only)
+playwright.config.ts
+tests/
+package.json
+package-lock.json
+node_modules/
