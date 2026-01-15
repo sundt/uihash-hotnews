@@ -1138,8 +1138,8 @@ async def rss_proxy_fetch_warmup_async(
                         "etag": (resp.headers.get("ETag") or "").strip(),
                         "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
                     }
-                        cache.set(key, result)
-                        return result
+                    cache.set(key, result)
+                    return result
             
             except (asyncio.TimeoutError, aiohttp.ClientError, socket.gaierror) as e:
                 attempts += 1
