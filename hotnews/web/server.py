@@ -2492,7 +2492,30 @@ async def api_news_pages(
             "items": sliced,
         }
 
+
     return UnicodeJSONResponse(content={"page_size": page_size, "platforms": results, "updated_at": updated_at})
+
+
+@app.post("/api/admin/reload-cache")
+async def api_admin_reload_cache(request: Request, _: str = Depends(verify_admin)):
+    """
+    API: 手动刷新平台和分类缓存（管理员专用）
+    
+    使用场景：
+    - 在管理后台禁用/启用RSS源后
+    - 修改平台分类配置后
+    - 避免重启容器即可生效
+    """
+    try:
+        viewer_service, _ = get_services()
+        result = viewer_service.reload_cache()
+        return UnicodeJSONResponse(content=result)
+    except Exception as e:
+        logger.error(f"Failed to reload cache: {e}")
+        return UnicodeJSONResponse(
+            content={"status": "error", "message": str(e)},
+            status_code=500
+        )
 
 
 @app.post("/api/subscriptions/rss-news")

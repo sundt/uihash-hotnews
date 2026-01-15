@@ -176,6 +176,11 @@ class NewsViewerService:
         self._dynamic_categories = None
         self._reload_platform_config()
 
+    def reload_cache(self):
+        """Public method to reload platform and category cache."""
+        self._reload_platform_config()
+        return {"status": "ok", "message": "Cache reloaded successfully"}
+
     def _reload_platform_config(self):
         """Reload platform categories and mappings from database."""
         try:
