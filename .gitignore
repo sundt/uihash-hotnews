@@ -40,6 +40,7 @@ docker/.env
 
 # Amazon Q / Copilot
 .amazonq/
+.claude/
 
 # OpenSpec changes
 # Default: ignore change proposals, but allow specific approved ones to be committed.
