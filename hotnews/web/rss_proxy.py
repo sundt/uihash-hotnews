@@ -213,9 +213,11 @@ def _strip_xml_tag(tag: str) -> str:
 
 
 def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
+    logger.info(f"DEBUG: parse_feed_content start len={len(body)} ct={content_type}")
     ct = (content_type or "").lower()
     text = body.decode("utf-8", errors="replace")
     if "json" in ct:
+        logger.info("DEBUG: parse_feed_content json path")
         payload = json.loads(text)
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             feed_title = str(payload.get("title") or "")
@@ -233,7 +235,9 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
 
     import xml.etree.ElementTree as ET
 
+    logger.info("DEBUG: parse_feed_content xml path fromstring")
     root = ET.fromstring(body)
+    logger.info("DEBUG: parse_feed_content xml parsed")
     root_tag = _strip_xml_tag(root.tag).lower()
 
     if root_tag == "rss":
