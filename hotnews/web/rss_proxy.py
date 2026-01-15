@@ -950,6 +950,9 @@ async def rss_proxy_fetch_warmup_async(
     parsed0 = urlparse(url)
     host0 = (parsed0.hostname or "").strip().lower()
 
+    # DEBUG LOG
+    logger.info(f"DEBUG: fetch_async entering url={url}")
+
     sem = await get_rss_host_async_semaphore(host0)
     await sem.acquire()
     try:
@@ -959,18 +962,16 @@ async def rss_proxy_fetch_warmup_async(
         cur_etag = (etag or "").strip()
         cur_lm = (last_modified or "").strip()
         
+        # DEBUG LOG
+        logger.info(f"DEBUG: fetch_async acquired sem url={url} host={host0}")
+
         while True:
             # CPU-bound URL validation
             try:
                 current_url = validate_http_url(current_url, check_resolve=not use_scraperapi)
             except Exception:
-                # If validation fails (e.g. DNS failure in sync code), re-raise
                 raise
 
-            # Rate limiting (stubbed for now or reuse sync logic via wrapper if needed)
-            # For now, we skip the complex shared memory rate limit sync/async bridge
-            # and rely on the semaphore.
-            
             headers = _rss_default_headers()
             if cur_etag:
                 headers["If-None-Match"] = cur_etag
@@ -1016,6 +1017,8 @@ async def rss_proxy_fetch_warmup_async(
                 proxy = proxies.get(scheme) or proxies.get("http")
 
             try:
+                # DEBUG LOG
+                logger.info(f"DEBUG: fetch_async calling aiohttp url={request_url}")
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         request_url,
@@ -1024,6 +1027,8 @@ async def rss_proxy_fetch_warmup_async(
                         allow_redirects=False,
                         proxy=proxy
                     ) as resp:
+                        # DEBUG LOG
+                        logger.info(f"DEBUG: fetch_async got headers status={resp.status} url={request_url}")
                         
                         # Handle Redirects
                         if resp.status in {301, 302, 303, 307, 308}:
@@ -1077,26 +1082,18 @@ async def rss_proxy_fetch_warmup_async(
                         max_bytes = _rss_http_max_bytes()
                         
                         try:
-                            # Use aiohttp's default read which reads full body
+                            # DEBUG LOG
+                            logger.info(f"DEBUG: fetch_async reading body url={request_url}")
                             data = await resp.read()
+                            logger.info(f"DEBUG: fetch_async read body len={len(data)}")
                         except Exception as e:
                             raise ValueError(f"Read error: {e}")
 
                         if len(data) > max_bytes:
-                            # Check if manual truncation needed or if aiohttp already handled content-length
-                             # Use aiohttp doesn't limit read size by default unless using content.read(n)
-                             # and logic is complex for chunked.
-                             # For now, if > max_bytes, we reject or try to salvage.
-                             # Let's reject for async simplicy first, or salvage sync logic
-                             # To keep it robust, we should probably read in chunks if we want to limit size accurately.
-                             # But resp.read() is simplest.
-                             # Let's stick to full read + check.
                              pass 
                              
                         if len(data) > max_bytes:
-                             # Best effort: truncate and try to salvage using the sync helper
                              data = data[:max_bytes]
-                             # raise ValueError("Response too large") # Or fallback to sync salvage
 
                         stripped = data.lstrip()
                         if stripped.startswith(b"<"):
@@ -1105,6 +1102,8 @@ async def rss_proxy_fetch_warmup_async(
                             if is_html:
                                 if scrape_rules:
                                     try:
+                                        # DEBUG LOG
+                                        logger.info(f"DEBUG: fetch_async parsing html")
                                         parsed = await asyncio.to_thread(parse_html_content, data, scrape_rules)
                                         result = {
                                             "url": url,
@@ -1123,6 +1122,8 @@ async def rss_proxy_fetch_warmup_async(
                                 raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 
                         try:
+                            # DEBUG LOG
+                            logger.info(f"DEBUG: fetch_async parsing feed")
                             parsed = await asyncio.to_thread(parse_feed_content, content_type, data)
                         except Exception as e:
                             if stripped[:2] == b"\x1f\x8b":
@@ -1138,9 +1139,13 @@ async def rss_proxy_fetch_warmup_async(
                             "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
                         }
                         cache.set(key, result)
+                        # DEBUG LOG
+                        logger.info(f"DEBUG: fetch_async success url={url}")
                         return result
             
             except (asyncio.TimeoutError, aiohttp.ClientError, socket.gaierror) as e:
+                # DEBUG LOG
+                logger.info(f"DEBUG: fetch_async error/timeout attempts={attempts} err={e} url={url}")
                 attempts += 1
                 if attempts >= 3:
                     raise ValueError(f"Upstream timeout/error: {e}") from e
