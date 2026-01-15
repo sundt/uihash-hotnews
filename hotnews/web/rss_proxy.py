@@ -1118,7 +1118,7 @@ async def rss_proxy_fetch_warmup_async(
                         except Exception as e:
                             if stripped[:2] == b"\x1f\x8b":
                                 raise ValueError("Upstream returned gzip-compressed bytes") from e
-                            raise
+                            raise ValueError(f"Feed parse error: {e}") from e
 
                         result = {
                             "url": url,
