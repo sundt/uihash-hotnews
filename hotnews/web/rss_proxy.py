@@ -213,11 +213,9 @@ def _strip_xml_tag(tag: str) -> str:
 
 
 def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
-    logger.info(f"DEBUG: parse_feed_content start len={len(body)} ct={content_type}")
     ct = (content_type or "").lower()
     text = body.decode("utf-8", errors="replace")
     if "json" in ct:
-        logger.info("DEBUG: parse_feed_content json path")
         payload = json.loads(text)
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             feed_title = str(payload.get("title") or "")
@@ -235,9 +233,7 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
 
     import xml.etree.ElementTree as ET
 
-    logger.info("DEBUG: parse_feed_content xml path fromstring")
     root = ET.fromstring(body)
-    logger.info("DEBUG: parse_feed_content xml parsed")
     root_tag = _strip_xml_tag(root.tag).lower()
 
     if root_tag == "rss":
@@ -954,9 +950,6 @@ async def rss_proxy_fetch_warmup_async(
     parsed0 = urlparse(url)
     host0 = (parsed0.hostname or "").strip().lower()
 
-    # DEBUG LOG
-    logger.info(f"DEBUG: fetch_async entering url={url}")
-
     sem = await get_rss_host_async_semaphore(host0)
     await sem.acquire()
     try:
@@ -966,9 +959,6 @@ async def rss_proxy_fetch_warmup_async(
         cur_etag = (etag or "").strip()
         cur_lm = (last_modified or "").strip()
         
-        # DEBUG LOG
-        logger.info(f"DEBUG: fetch_async acquired sem url={url} host={host0}")
-
         while True:
             # CPU-bound URL validation
             try:
@@ -1021,8 +1011,6 @@ async def rss_proxy_fetch_warmup_async(
                 proxy = proxies.get(scheme) or proxies.get("http")
 
             try:
-                # DEBUG LOG
-                logger.info(f"DEBUG: fetch_async calling aiohttp url={request_url}")
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         request_url,
@@ -1031,8 +1019,6 @@ async def rss_proxy_fetch_warmup_async(
                         allow_redirects=False,
                         proxy=proxy
                     ) as resp:
-                        # DEBUG LOG
-                        logger.info(f"DEBUG: fetch_async got headers status={resp.status} url={request_url}")
                         
                         # Handle Redirects
                         if resp.status in {301, 302, 303, 307, 308}:
@@ -1086,10 +1072,8 @@ async def rss_proxy_fetch_warmup_async(
                         max_bytes = _rss_http_max_bytes()
                         
                         try:
-                            # DEBUG LOG
-                            logger.info(f"DEBUG: fetch_async reading body url={request_url}")
+                            # Use aiohttp's default read which reads full body
                             data = await resp.read()
-                            logger.info(f"DEBUG: fetch_async read body len={len(data)}")
                         except Exception as e:
                             raise ValueError(f"Read error: {e}")
 
@@ -1105,9 +1089,6 @@ async def rss_proxy_fetch_warmup_async(
                             is_html = (b"<html" in head) or (b"<!doctype html" in head)
                             if is_html:
                                 if scrape_rules:
-                                    try:
-                                        # DEBUG LOG
-                                        logger.info(f"DEBUG: fetch_async parsing html")
                                         parsed = await asyncio.to_thread(parse_html_content, data, scrape_rules)
                                         result = {
                                             "url": url,
@@ -1126,9 +1107,13 @@ async def rss_proxy_fetch_warmup_async(
                                 raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 
                         try:
-                            # DEBUG LOG
-                            logger.info(f"DEBUG: fetch_async parsing feed")
-                            parsed = await asyncio.to_thread(parse_feed_content, content_type, data)
+                            # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
+                            parsed = await asyncio.wait_for(
+                                asyncio.to_thread(parse_feed_content, content_type, data),
+                                timeout=20.0
+                            )
+                        except asyncio.TimeoutError:
+                            raise ValueError("Feed parsing timeout")
                         except Exception as e:
                             if stripped[:2] == b"\x1f\x8b":
                                 raise ValueError("Upstream returned gzip-compressed bytes") from e
@@ -1143,13 +1128,9 @@ async def rss_proxy_fetch_warmup_async(
                             "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
                         }
                         cache.set(key, result)
-                        # DEBUG LOG
-                        logger.info(f"DEBUG: fetch_async success url={url}")
                         return result
             
             except (asyncio.TimeoutError, aiohttp.ClientError, socket.gaierror) as e:
-                # DEBUG LOG
-                logger.info(f"DEBUG: fetch_async error/timeout attempts={attempts} err={e} url={url}")
                 attempts += 1
                 if attempts >= 3:
                     raise ValueError(f"Upstream timeout/error: {e}") from e
