@@ -10,6 +10,7 @@ venv/
 *.egg-info/
 dist/
 build/
+pytest.ini
 
 # IDE
 .vscode/
