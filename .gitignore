@@ -113,3 +113,12 @@ scripts/rsync-sync.sh
 .cursorrules
 .windsurfrules
 CLAUDE.md
+
+# Temporary Scraper Scripts
+scrape_*.py
+debug_*.py
+
+# Local Data/Logs
+temp_logs.txt
+*.xml
+uv.lock
