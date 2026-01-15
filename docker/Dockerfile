@@ -16,11 +16,11 @@ RUN set -ex && \
 # Use local supercronic binary to avoid network issues
 COPY docker/supercronic-linux-amd64 /usr/local/bin/supercronic
 RUN chmod +x /usr/local/bin/supercronic
-# 安装依赖
-COPY requirements.txt .
+# 安装依赖 (从 requirements.toml)
+COPY requirements.toml pyproject.toml
 # 优先安装 CPU版 PyTorch (使用清华源加速)
 
-RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install --no-cache-dir . -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY docker/manage.py .
 COPY hotnews/ ./hotnews/
