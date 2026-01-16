@@ -1089,6 +1089,8 @@ def _mb_default_rules() -> Dict[str, Any]:
     return {
         "enabled": True,
         "drop_published_at_zero": True,
+        "category_whitelist_enabled": True,  # 是否启用栏目过滤
+        "category_whitelist": ["explore", "tech_news", "ainews", "developer", "knowledge"],  # 允许的栏目ID列表
         "topic_keywords": [
             "ai",
             "llm",
@@ -1188,6 +1190,16 @@ def _mb_load_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
         rules["drop_published_at_zero"] = bool(rules.get("drop_published_at_zero", True))
     except Exception:
         rules["drop_published_at_zero"] = True
+    # Category whitelist settings
+    try:
+        rules["category_whitelist_enabled"] = bool(rules.get("category_whitelist_enabled", True))
+    except Exception:
+        rules["category_whitelist_enabled"] = True
+    cw = rules.get("category_whitelist")
+    if not isinstance(cw, list):
+        rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer", "knowledge"]
+    else:
+        rules["category_whitelist"] = [str(x or "").strip().lower() for x in cw if str(x or "").strip()]
     for k in ("topic_keywords", "depth_keywords", "negative_hard", "negative_soft", "negative_exempt_domains"):
         v = rules.get(k)
         if not isinstance(v, list):
@@ -1539,10 +1551,11 @@ async def api_rss_brief_timeline(
     try:
         if ai_mode:
             # [MODIFIED] Removed hardcoded category restriction. Fetch all 'include' items.
+            # Added s.category to enable category whitelist filtering
             if drop_zero:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
+                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
                     FROM rss_entries e
                     JOIN rss_entry_ai_labels l
                       ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
@@ -1559,7 +1572,7 @@ async def api_rss_brief_timeline(
             else:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
+                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
                     FROM rss_entries e
                     JOIN rss_entry_ai_labels l
                       ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
@@ -1573,10 +1586,11 @@ async def api_rss_brief_timeline(
                     (raw_fetch,),
                 )
         else:
+            # Added s.category to enable category whitelist filtering
             if drop_zero:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
+                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
                     FROM rss_entries e
                     LEFT JOIN rss_sources s ON s.id = e.source_id
                     WHERE e.published_at > 0
@@ -1588,7 +1602,7 @@ async def api_rss_brief_timeline(
             else:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
+                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
                     FROM rss_entries e
                     LEFT JOIN rss_sources s ON s.id = e.source_id
                     ORDER BY e.published_at DESC, e.id DESC
@@ -1600,6 +1614,10 @@ async def api_rss_brief_timeline(
     except Exception:
         rows = []
 
+    # Category whitelist settings
+    category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
+    category_whitelist = set(rules.get("category_whitelist") or [])
+
     items_all: List[Dict[str, Any]] = []
     seen_urls = set()
     for r in rows:
@@ -1610,6 +1628,7 @@ async def api_rss_brief_timeline(
             created_at = int(r[4] or 0)
             published_at = int(r[5] or 0)
             sname = str(r[6] or "")
+            scategory = str(r[7] or "").strip().lower()
         else:
             sid = str(r[0] or "").strip()
             title = str(r[1] or "")
@@ -1617,6 +1636,7 @@ async def api_rss_brief_timeline(
             created_at = int(r[3] or 0)
             published_at = int(r[4] or 0)
             sname = str(r[5] or "")
+            scategory = str(r[6] or "").strip().lower()
         u = url.strip()
         if not u:
             continue
@@ -1624,6 +1644,10 @@ async def api_rss_brief_timeline(
             continue
         if drop_zero and published_at <= 0:
             continue
+        # Category whitelist filtering
+        if category_whitelist_enabled and category_whitelist:
+            if scategory not in category_whitelist:
+                continue
         if not ai_mode:
             ok, _ = _mb_eval(rules=rules, source_id=sid, source_name=sname, title=title, url=u)
             if not ok:
@@ -1648,6 +1672,8 @@ async def api_rss_brief_timeline(
             "limit": int(lim),
             "drop_published_at_zero": bool(drop_zero),
             "ai_enabled": bool(ai_mode),
+            "category_whitelist_enabled": bool(category_whitelist_enabled),
+            "category_whitelist": list(category_whitelist),
             "items": sliced,
             "total_candidates": int(len(items_all)),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
