@@ -1033,9 +1033,14 @@ async def rss_proxy_fetch_warmup_async(
             # Use SOCKS5 proxy if enabled (takes precedence over default proxies)
             connector = None
             if use_socks_proxy and not use_scraperapi:
-                socks_proxy = os.environ.get("HOTNEWS_SOCKS_PROXY", "socks5h://172.17.0.1:7891").strip()
+                socks_proxy = os.environ.get("HOTNEWS_SOCKS_PROXY", "socks5://172.17.0.1:7891").strip()
                 if socks_proxy:
-                    connector = ProxyConnector.from_url(socks_proxy)
+                    # Convert socks5h to socks5 (aiohttp_socks uses rdns param instead of 'h' suffix)
+                    # socks5h means remote DNS resolution, which is rdns=True in aiohttp_socks
+                    use_rdns = socks_proxy.startswith("socks5h://")
+                    if use_rdns:
+                        socks_proxy = socks_proxy.replace("socks5h://", "socks5://", 1)
+                    connector = ProxyConnector.from_url(socks_proxy, rdns=use_rdns)
                     logger.info(f"Using SOCKS5 proxy for RSS feed (async): {current_url}")
             
             proxy = None
