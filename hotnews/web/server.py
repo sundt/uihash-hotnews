@@ -1090,7 +1090,7 @@ def _mb_default_rules() -> Dict[str, Any]:
         "enabled": True,
         "drop_published_at_zero": True,
         "category_whitelist_enabled": True,  # 是否启用栏目过滤
-        "category_whitelist": ["explore", "tech_news", "ainews", "developer", "knowledge"],  # 允许的栏目ID列表
+        "category_whitelist": ["explore", "tech_news", "ainews", "developer"],  # 允许的栏目ID列表
         "topic_keywords": [
             "ai",
             "llm",
@@ -1197,7 +1197,7 @@ def _mb_load_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
         rules["category_whitelist_enabled"] = True
     cw = rules.get("category_whitelist")
     if not isinstance(cw, list):
-        rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer", "knowledge"]
+        rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer"]
     else:
         rules["category_whitelist"] = [str(x or "").strip().lower() for x in cw if str(x or "").strip()]
     for k in ("topic_keywords", "depth_keywords", "negative_hard", "negative_soft", "negative_exempt_domains"):
