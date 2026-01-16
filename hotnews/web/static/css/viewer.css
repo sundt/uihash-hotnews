@@ -777,6 +777,22 @@
             align-items: flex-start;
         }
 
+        /* New content indicator red dot */
+        .news-item .tr-new-dot {
+            width: 6px;
+            height: 6px;
+            background: #ef4444;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-right: 4px;
+            margin-top: 6px;
+            display: inline-block;
+        }
+
+        .news-item.read .tr-new-dot {
+            display: none;
+        }
+
         #tab-rsscol-rss {
             background:
                 linear-gradient(rgba(250, 248, 243, 0.92), rgba(250, 248, 243, 0.92)),

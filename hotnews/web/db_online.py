@@ -194,6 +194,24 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         """
     )
 
+    # News click tracking for analytics
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS news_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            news_id TEXT NOT NULL,
+            url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            source_name TEXT DEFAULT '',
+            category TEXT DEFAULT '',
+            clicked_at INTEGER NOT NULL,
+            user_agent TEXT DEFAULT ''
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_news_clicks_news_id ON news_clicks(news_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_news_clicks_clicked_at ON news_clicks(clicked_at)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")

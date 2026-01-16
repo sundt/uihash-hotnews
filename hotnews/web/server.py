@@ -2156,6 +2156,82 @@ async def api_news_check_updates():
     )
 
 
+@app.post("/api/news/click")
+async def api_news_click(request: Request):
+    """
+    API: Record a news item click for analytics.
+    """
+    import time
+    try:
+        data = await request.json()
+        news_id = str(data.get("news_id") or "").strip()
+        url = str(data.get("url") or "").strip()
+        title = str(data.get("title") or "").strip()[:200]
+        source_name = str(data.get("source_name") or "").strip()[:100]
+        category = str(data.get("category") or "").strip()[:50]
+        user_agent = request.headers.get("user-agent", "")[:500]
+        
+        if not news_id:
+            return UnicodeJSONResponse(content={"success": False, "error": "missing news_id"}, status_code=400)
+        
+        conn = _get_online_db_conn()
+        conn.execute(
+            """
+            INSERT INTO news_clicks (news_id, url, title, source_name, category, clicked_at, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (news_id, url, title, source_name, category, int(time.time()), user_agent)
+        )
+        conn.commit()
+        
+        return UnicodeJSONResponse(content={"success": True})
+    except Exception as e:
+        return UnicodeJSONResponse(content={"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/admin/news/clicks")
+async def api_admin_news_clicks(
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(50, ge=1, le=200)
+):
+    """
+    API: Get top clicked news items for analytics.
+    """
+    import time
+    conn = _get_online_db_conn()
+    since_ts = int(time.time()) - days * 86400
+    
+    cur = conn.execute(
+        """
+        SELECT news_id, url, title, source_name, category, COUNT(*) as click_count, MAX(clicked_at) as last_clicked
+        FROM news_clicks
+        WHERE clicked_at >= ?
+        GROUP BY news_id
+        ORDER BY click_count DESC, last_clicked DESC
+        LIMIT ?
+        """,
+        (since_ts, limit)
+    )
+    
+    items = []
+    for row in cur.fetchall():
+        items.append({
+            "news_id": row[0],
+            "url": row[1],
+            "title": row[2],
+            "source_name": row[3],
+            "category": row[4],
+            "click_count": row[5],
+            "last_clicked": row[6]
+        })
+    
+    # Total clicks in period
+    cur2 = conn.execute("SELECT COUNT(*) FROM news_clicks WHERE clicked_at >= ?", (since_ts,))
+    total = cur2.fetchone()[0] or 0
+    
+    return UnicodeJSONResponse(content={"items": items, "total": total, "days": days})
+
+
 @app.get("/api/news")
 async def api_news(
     request: Request,

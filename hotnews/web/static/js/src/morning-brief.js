@@ -1,4 +1,5 @@
 import { TR, ready, escapeHtml } from './core.js';
+import { storage } from './storage.js';
 
 const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
 const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
@@ -6,6 +7,8 @@ const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
 const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
+const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
+const NEW_CONTENT_WINDOW_SEC = 24 * 3600;
 
 function getItemsPerCard() {
     return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.morning_brief_items) || 50;
@@ -24,6 +27,19 @@ function _getActiveTabId() {
     } catch (e) {
         return null;
     }
+}
+
+function _getLastVisit() {
+    const map = storage.get(LAST_VISIT_KEY, {});
+    return Number(map[MORNING_BRIEF_CATEGORY_ID]) || 0;
+}
+
+function _isNewContent(publishedAt) {
+    const ts = Number(publishedAt) || 0;
+    if (!ts) return false;
+    const now = Math.floor(Date.now() / 1000);
+    const lastVisit = _getLastVisit();
+    return ts > lastVisit && (now - ts) < NEW_CONTENT_WINDOW_SEC;
 }
 
 function _applyPagingToCard(card) {
@@ -61,9 +77,12 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const url = escapeHtml(n?.url || '#');
         const t = _fmtTime(n?.published_at || n?.created_at);
         const timeHtml = t ? `<span class="tr-mb-time" style="margin-left:8px;color:#9ca3af;font-size:12px;">${escapeHtml(t)}</span>` : '';
+        const publishedAt = n?.published_at || n?.created_at || 0;
+        const dotHtml = _isNewContent(publishedAt) ? '<span class="tr-new-dot"></span>' : '';
         return `
             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
+                    ${dotHtml}
                     <span class="news-index">${String(idx + 1)}</span>
                     <a class="news-title" href="${url}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                         ${title}

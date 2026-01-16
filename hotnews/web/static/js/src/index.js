@@ -29,6 +29,7 @@ import './explore-timeline.js';
 import './rss-category-carousel.js';
 import './title-drag-scroll.js';
 import './morning-brief.js';
+import './click-tracker.js';
 
 // 异步加载非关键 heavy 模块 (Code Splitting)
 import('./platform-reorder.js');

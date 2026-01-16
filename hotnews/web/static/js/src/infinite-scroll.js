@@ -1,8 +1,11 @@
 import { TR, ready, formatNewsDate, escapeHtml } from './core.js';
+import { storage } from './storage.js';
 
 const STEP = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const ROOT_MARGIN = '240px 0px 240px 0px';
 const MAX_ITEMS_PER_PLATFORM = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
+const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
+const NEW_CONTENT_WINDOW_SEC = 24 * 3600; // 24 hours
 
 let _observer = null;
 let _armed = false;
@@ -19,6 +22,20 @@ const BULK_DEBOUNCE_MS = 250;
 
 function getActiveCategoryId() {
     return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
+}
+
+function getLastVisit(categoryId) {
+    if (!categoryId) return 0;
+    const map = storage.get(LAST_VISIT_KEY, {});
+    return Number(map[categoryId]) || 0;
+}
+
+function isNewContent(publishedAt, categoryId) {
+    const ts = Number(publishedAt) || 0;
+    if (!ts) return false;
+    const now = Math.floor(Date.now() / 1000);
+    const lastVisit = getLastVisit(categoryId);
+    return ts > lastVisit && (now - ts) < NEW_CONTENT_WINDOW_SEC;
 }
 
 function setPlaceholderText(card, text) {
@@ -82,7 +99,7 @@ function cancelBulkLoadCategory() {
     }
 }
 
-function createNewsLi(n, idx, platformId) {
+function createNewsLi(n, idx, platformId, categoryId) {
     const li = document.createElement('li');
     li.className = 'news-item';
     li.dataset.newsId = String(n?.stable_id || '');
@@ -90,6 +107,14 @@ function createNewsLi(n, idx, platformId) {
 
     const content = document.createElement('div');
     content.className = 'news-item-content';
+
+    // Add red dot for new content
+    const publishedAt = n?.published_at || n?.created_at || n?.timestamp || 0;
+    if (isNewContent(publishedAt, categoryId || getActiveCategoryId())) {
+        const dot = document.createElement('span');
+        dot.className = 'tr-new-dot';
+        content.appendChild(dot);
+    }
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -248,7 +273,7 @@ async function bulkLoadCategory(categoryId, opts = {}) {
         const p = byPid[pid] || {};
         const items = Array.isArray(p.items) ? p.items : [];
         for (let i = 0; i < items.length; i++) {
-            list.appendChild(createNewsLi(items[i], i + 1, pid));
+            list.appendChild(createNewsLi(items[i], i + 1, pid, categoryId));
         }
 
         const loadedCount = list.querySelectorAll('.news-item').length;
@@ -456,79 +481,8 @@ async function fetchNextPage(card, neededTotal, opts = {}) {
         for (let i = 0; i < items.length; i++) {
             const n = items[i] || {};
             const idx = currentTotal + i + 1;
-
-            const li = document.createElement('li');
-            li.className = 'news-item';
-            li.dataset.newsId = String(n.stable_id || '');
-            li.dataset.newsTitle = String(n.display_title || n.title || '');
-
-            const content = document.createElement('div');
-            content.className = 'news-item-content';
-
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.className = 'news-checkbox';
-            cb.title = '标记已读';
-            cb.addEventListener('change', () => {
-                try { window.markAsRead(cb); } catch (e) { /* ignore */ }
-            });
-
-            const indexSpan = document.createElement('span');
-            indexSpan.className = 'news-index';
-            indexSpan.textContent = String(idx);
-
-            const a = document.createElement('a');
-            a.className = 'news-title';
-            if (n.is_cross_platform) a.classList.add('cross-platform');
-            a.href = String(n.url || '#');
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.setAttribute('onclick', 'handleTitleClickV2(this, event)');
-            a.setAttribute('onauxclick', 'handleTitleClickV2(this, event)');
-            a.setAttribute('oncontextmenu', 'handleTitleClickV2(this, event)');
-            a.setAttribute('onkeydown', 'handleTitleKeydownV2(this, event)');
-            a.textContent = String(n.display_title || n.title || '');
-
-            if (n.is_cross_platform) {
-                const cps = Array.isArray(n.cross_platforms) ? n.cross_platforms : [];
-                const badge = document.createElement('span');
-                badge.className = 'cross-platform-badge';
-                badge.title = `同时出现在: ${cps.join(', ')}`;
-                badge.textContent = `🔥 ${String(n.cross_platform_count ?? '')}`;
-                a.appendChild(document.createTextNode(' '));
-                a.appendChild(badge);
-            }
-
-            content.appendChild(cb);
-            content.appendChild(indexSpan);
-            content.appendChild(a);
-
-            // Add date display if timestamp is available
-            const dateStr = formatNewsDate(n.timestamp);
-            if (dateStr) {
-                const dateSpan = document.createElement('span');
-                dateSpan.className = 'tr-news-date';
-                dateSpan.style.marginLeft = '8px';
-                dateSpan.style.color = '#9ca3af';
-                dateSpan.style.fontSize = '12px';
-                dateSpan.style.whiteSpace = 'nowrap';
-                dateSpan.textContent = dateStr;
-                content.appendChild(dateSpan);
-            }
-
-            li.appendChild(content);
-
-            const meta = String(n.meta || '').trim();
-            if (meta) {
-                const sub = document.createElement('div');
-                sub.className = 'news-subtitle';
-                sub.textContent = meta;
-                li.appendChild(sub);
-            }
-
+            const li = createNewsLi(n, idx, pid, getActiveCategoryId());
             list.appendChild(li);
-            applyReadStateToItem(li);
-            applyCategoryFilterToItem(li);
         }
 
         card.dataset.loadedCount = String(list.querySelectorAll('.news-item').length);
