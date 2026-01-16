@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 import aiohttp
+from aiohttp_socks import ProxyConnector
 from fastapi import APIRouter, Body, Query, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -1030,131 +1031,148 @@ async def rss_proxy_fetch_warmup_async(
             proxy = None
             proxies = _rss_http_proxies()
             # Use SOCKS5 proxy if enabled (takes precedence over default proxies)
+            connector = None
             if use_socks_proxy and not use_scraperapi:
                 socks_proxy = os.environ.get("HOTNEWS_SOCKS_PROXY", "socks5h://172.17.0.1:7891").strip()
                 if socks_proxy:
-                    proxy = socks_proxy
+                    connector = ProxyConnector.from_url(socks_proxy)
                     logger.info(f"Using SOCKS5 proxy for RSS feed (async): {current_url}")
-            elif proxies:
-                scheme = urlparse(request_url).scheme
-                proxy = proxies.get(scheme) or proxies.get("http")
+            
+            proxy = None
+            if not connector:
+                proxies = _rss_http_proxies()
+                if proxies:
+                    scheme = urlparse(request_url).scheme
+                    proxy = proxies.get(scheme) or proxies.get("http")
 
             try:
-                session = await get_rss_async_session()
-                async with session.get(
-                    request_url,
-                    headers=headers,
-                    timeout=timeout,
-                    allow_redirects=False,
-                    proxy=proxy
-                ) as resp:
-                    # Handle Redirects
-                    if resp.status in {301, 302, 303, 307, 308}:
-                        loc = (resp.headers.get("Location") or "").strip()
-                        if not loc:
-                            raise ValueError("Redirect without location")
-                        redirects += 1
-                        if redirects > 5:
-                            raise ValueError("Too many redirects")
-                        current_url = urljoin(current_url, loc)
-                        continue
+                # Create session based on proxy type
+                if connector:
+                    # Use dedicated session with ProxyConnector for socks5
+                    session = aiohttp.ClientSession(connector=connector)
+                    should_close_session = True
+                else:
+                    session = await get_rss_async_session()
+                    should_close_session = False
+                
+                try:
+                    async with session.get(
+                        request_url,
+                        headers=headers,
+                        timeout=timeout,
+                        allow_redirects=False,
+                        proxy=proxy if not connector else None,
+                    ) as resp:
+                        # Handle Redirects
+                        if resp.status in {301, 302, 303, 307, 308}:
+                            loc = (resp.headers.get("Location") or "").strip()
+                            if not loc:
+                                raise ValueError("Redirect without location")
+                            redirects += 1
+                            if redirects > 5:
+                                raise ValueError("Too many redirects")
+                            current_url = urljoin(current_url, loc)
+                            continue
 
-                    # Handle 304 Not Modified
-                    if resp.status == 304:
-                        cached_any = rss_proxy_cache_get_any_ttl(url, ttl=10**9)
-                        if cached_any is not None:
-                            cached_any = dict(cached_any)
-                            cached_any["etag"] = (resp.headers.get("ETag") or cur_etag or "").strip()
-                            cached_any["last_modified"] = (
-                                resp.headers.get("Last-Modified") or cur_lm or ""
-                            ).strip()
-                            cache.set(key, cached_any)
-                            return cached_any
-                        cur_etag = ""
-                        cur_lm = ""
-                        continue
+                        # Handle 304 Not Modified
+                        if resp.status == 304:
+                            cached_any = rss_proxy_cache_get_any_ttl(url, ttl=10**9)
+                            if cached_any is not None:
+                                cached_any = dict(cached_any)
+                                cached_any["etag"] = (resp.headers.get("ETag") or cur_etag or "").strip()
+                                cached_any["last_modified"] = (
+                                    resp.headers.get("Last-Modified") or cur_lm or ""
+                                ).strip()
+                                cache.set(key, cached_any)
+                                return cached_any
+                            cur_etag = ""
+                            cur_lm = ""
+                            continue
 
-                    # Handle Rate Limits
-                    if resp.status == 429:
-                        logger.warning("RSS upstream 429. url=%s", current_url)
-                        ra = (resp.headers.get("Retry-After") or "").strip()
+                        # Handle Rate Limits
+                        if resp.status == 429:
+                            logger.warning("RSS upstream 429. url=%s", current_url)
+                            ra = (resp.headers.get("Retry-After") or "").strip()
+                            try:
+                                retry_after_s = int(ra)
+                            except Exception:
+                                retry_after_s = None
+                            raise ValueError("Upstream rate limited")
+                        
+                        if resp.status == 403:
+                            logger.warning("RSS upstream 403. url=%s", current_url)
+
+                        if resp.status >= 500:
+                            if resp.status == 503:
+                                logger.warning("RSS upstream 503. url=%s", current_url)
+                            raise ValueError(f"Upstream error: {resp.status}")
+
+                        if resp.status >= 400:
+                            raise ValueError(f"Upstream error: {resp.status}")
+
+                        # Read Content
+                        content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+                        max_bytes = _rss_http_max_bytes()
+                        
                         try:
-                            retry_after_s = int(ra)
-                        except Exception:
-                            retry_after_s = None
-                        raise ValueError("Upstream rate limited")
-                    
-                    if resp.status == 403:
-                        logger.warning("RSS upstream 403. url=%s", current_url)
+                            # Use aiohttp's default read which reads full body
+                            data = await resp.read()
+                        except Exception as e:
+                            raise ValueError(f"Read error: {e}")
 
-                    if resp.status >= 500:
-                        if resp.status == 503:
-                            logger.warning("RSS upstream 503. url=%s", current_url)
-                        raise ValueError(f"Upstream error: {resp.status}")
+                        if len(data) > max_bytes:
+                                data = data[:max_bytes]
 
-                    if resp.status >= 400:
-                        raise ValueError(f"Upstream error: {resp.status}")
+                        stripped = data.lstrip()
+                        if stripped.startswith(b"<"):
+                            head = stripped[:512].lower()
+                            is_html = (b"<html" in head) or (b"<!doctype html" in head)
+                            if is_html:
+                                if scrape_rules:
+                                    try:
+                                        parsed = await asyncio.to_thread(parse_html_content, data, scrape_rules)
+                                        result = {
+                                            "url": url,
+                                            "final_url": current_url,
+                                            "content_type": content_type,
+                                            "data": parsed,
+                                            "etag": (resp.headers.get("ETag") or "").strip(),
+                                            "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                                        }
+                                        cache.set(key, result)
+                                        return result
+                                    except Exception:
+                                        pass
+                                
+                                snippet = stripped[:240].decode("utf-8", errors="replace")
+                                raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 
-                    # Read Content
-                    content_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
-                    max_bytes = _rss_http_max_bytes()
-                    
-                    try:
-                        # Use aiohttp's default read which reads full body
-                        data = await resp.read()
-                    except Exception as e:
-                        raise ValueError(f"Read error: {e}")
+                        try:
+                            # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
+                            parsed = await asyncio.wait_for(
+                                asyncio.to_thread(parse_feed_content, content_type, data),
+                                timeout=20.0
+                            )
+                        except asyncio.TimeoutError:
+                            raise ValueError("Feed parsing timeout")
+                        except Exception as e:
+                            if stripped[:2] == b"\x1f\x8b":
+                                raise ValueError("Upstream returned gzip-compressed bytes") from e
+                            raise ValueError(f"Feed parse error: {e}") from e
 
-                    if len(data) > max_bytes:
-                            data = data[:max_bytes]
-
-                    stripped = data.lstrip()
-                    if stripped.startswith(b"<"):
-                        head = stripped[:512].lower()
-                        is_html = (b"<html" in head) or (b"<!doctype html" in head)
-                        if is_html:
-                            if scrape_rules:
-                                try:
-                                    parsed = await asyncio.to_thread(parse_html_content, data, scrape_rules)
-                                    result = {
-                                        "url": url,
-                                        "final_url": current_url,
-                                        "content_type": content_type,
-                                        "data": parsed,
-                                        "etag": (resp.headers.get("ETag") or "").strip(),
-                                        "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
-                                    }
-                                    cache.set(key, result)
-                                    return result
-                                except Exception:
-                                    pass
-                            
-                            snippet = stripped[:240].decode("utf-8", errors="replace")
-                            raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
-
-                    try:
-                        # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
-                        parsed = await asyncio.wait_for(
-                            asyncio.to_thread(parse_feed_content, content_type, data),
-                            timeout=20.0
-                        )
-                    except asyncio.TimeoutError:
-                        raise ValueError("Feed parsing timeout")
-                    except Exception as e:
-                        if stripped[:2] == b"\x1f\x8b":
-                            raise ValueError("Upstream returned gzip-compressed bytes") from e
-                        raise ValueError(f"Feed parse error: {e}") from e
-
-                    result = {
-                        "url": url,
-                        "final_url": current_url,
-                        "content_type": content_type,
-                        "data": parsed,
-                        "etag": (resp.headers.get("ETag") or "").strip(),
-                        "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
-                    }
-                    cache.set(key, result)
-                    return result
+                        result = {
+                            "url": url,
+                            "final_url": current_url,
+                            "content_type": content_type,
+                            "data": parsed,
+                            "etag": (resp.headers.get("ETag") or "").strip(),
+                            "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                        }
+                        cache.set(key, result)
+                        return result
+                finally:
+                    if should_close_session:
+                        await session.close()
             
             except (asyncio.TimeoutError, aiohttp.ClientError, socket.gaierror) as e:
                 attempts += 1
