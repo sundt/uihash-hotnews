@@ -917,6 +917,15 @@ export const data = {
             const response = await fetch('/api/news');
             const baseData = await response.json();
 
+            // 自动同步本地缓存：清理服务器上已不存在的平台
+            try {
+                if (TR.settings?.syncCacheWithServer && baseData?.categories) {
+                    TR.settings.syncCacheWithServer(baseData.categories);
+                }
+            } catch (e) {
+                console.error('[HotNews] Cache sync failed:', e);
+            }
+
             this.renderViewerFromData(baseData, state);
             if (state.preserveScroll) {
                 window.scrollTo({ top: state.scrollY, behavior: 'auto' });

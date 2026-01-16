@@ -1004,6 +1004,94 @@ export const settings = {
         });
 
         return result;
+    },
+
+    /**
+     * 同步本地缓存与服务器数据
+     * 自动清理不存在于服务器的平台，防止禁用源后仍显示
+     * @param {Object} serverCategories - 服务器返回的分类数据
+     * @returns {boolean} - 是否进行了清理
+     */
+    syncCacheWithServer(serverCategories) {
+        try {
+            const config = this.getCategoryConfig();
+            if (!config) return false; // 没有本地缓存，无需同步
+
+            // 收集服务器返回的所有平台 ID
+            const serverPlatforms = new Set();
+            Object.values(serverCategories || {}).forEach(cat => {
+                const platforms = cat?.platforms || {};
+                Object.keys(platforms).forEach(pid => serverPlatforms.add(pid));
+            });
+
+            if (serverPlatforms.size === 0) return false; // 服务器没有数据，跳过
+
+            let modified = false;
+
+            // 1. 清理 platformOrder 中的无效平台
+            if (config.platformOrder && typeof config.platformOrder === 'object') {
+                Object.keys(config.platformOrder).forEach(catId => {
+                    if (Array.isArray(config.platformOrder[catId])) {
+                        const before = config.platformOrder[catId].length;
+                        config.platformOrder[catId] = config.platformOrder[catId].filter(pid => {
+                            const keep = serverPlatforms.has(pid);
+                            if (!keep) {
+                                console.log(`[HotNews] 清理无效平台: ${pid} (from platformOrder.${catId})`);
+                            }
+                            return keep;
+                        });
+                        if (config.platformOrder[catId].length < before) {
+                            modified = true;
+                        }
+                    }
+                });
+            }
+
+            // 2. 清理 customCategories 中的无效平台
+            if (Array.isArray(config.customCategories)) {
+                config.customCategories.forEach(cat => {
+                    if (Array.isArray(cat.platforms)) {
+                        const before = cat.platforms.length;
+                        cat.platforms = cat.platforms.filter(pid => {
+                            const keep = serverPlatforms.has(pid);
+                            if (!keep) {
+                                console.log(`[HotNews] 清理无效平台: ${pid} (from customCategory ${cat.id})`);
+                            }
+                            return keep;
+                        });
+                        if (cat.platforms.length < before) {
+                            modified = true;
+                        }
+                    }
+                });
+            }
+
+            // 3. 清理 hiddenPlatforms 中的无效平台
+            if (Array.isArray(config.hiddenPlatforms)) {
+                const before = config.hiddenPlatforms.length;
+                config.hiddenPlatforms = config.hiddenPlatforms.filter(pid => {
+                    const keep = serverPlatforms.has(pid);
+                    if (!keep) {
+                        console.log(`[HotNews] 清理无效平台: ${pid} (from hiddenPlatforms)`);
+                    }
+                    return keep;
+                });
+                if (config.hiddenPlatforms.length < before) {
+                    modified = true;
+                }
+            }
+
+            // 保存清理后的配置
+            if (modified) {
+                this.saveCategoryConfig(config);
+                console.log('[HotNews] 已自动清理本地缓存中的无效平台');
+            }
+
+            return modified;
+        } catch (e) {
+            console.error('[HotNews] syncCacheWithServer error:', e);
+            return false;
+        }
     }
 };
 
