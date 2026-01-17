@@ -93,6 +93,7 @@ from hotnews.web.rss_proxy import router as _rss_proxy_router
 from hotnews.web.rss_proxy import rss_proxy_fetch_cached, rss_proxy_fetch_warmup, validate_http_url
 from hotnews.web import page_rendering
 from hotnews.web.misc_routes import router as _misc_router
+from hotnews.web.timeline_cache import brief_timeline_cache, explore_timeline_cache, clear_all_timeline_caches, get_cache_status
 from hotnews.web.online_routes import router as _online_router
 from hotnews.web.viewer_controls_routes import router as _viewer_controls_router
 from hotnews.web.fetch_metrics_routes import router as _fetch_metrics_router
@@ -1547,11 +1548,42 @@ async def api_rss_brief_timeline(
     if drop_published_at_zero is not None:
         drop_zero = int(drop_published_at_zero or 0) == 1
 
-    # Fetch slightly more to account for post-filtering
-    raw_fetch = max(5000, int((off + lim) * 20))
-    raw_fetch = min(20000, raw_fetch)
-
     ai_mode = _mb_ai_enabled()
+    
+    # Category whitelist settings (needed for both cache check and response)
+    category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
+    category_whitelist = set(rules.get("category_whitelist") or [])
+    
+    # Build cache config for validation
+    cache_config = {
+        "drop_zero": drop_zero,
+        "ai_mode": ai_mode,
+        "rules_hash": hash(str(sorted(rules.items()))),
+        "category_whitelist": tuple(sorted(category_whitelist)),
+    }
+    
+    # Try to get from cache
+    cached_items = brief_timeline_cache.get(cache_config)
+    if cached_items is not None:
+        # Cache hit - slice and return
+        sliced = cached_items[off:off + lim]
+        return UnicodeJSONResponse(
+            content={
+                "offset": int(off),
+                "limit": int(lim),
+                "drop_published_at_zero": bool(drop_zero),
+                "ai_enabled": bool(ai_mode),
+                "category_whitelist_enabled": bool(category_whitelist_enabled),
+                "category_whitelist": list(category_whitelist),
+                "items": sliced,
+                "total_candidates": int(len(cached_items)),
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "cached": True,
+            }
+        )
+
+    # Cache miss - fetch from database
+    # Fetch slightly more to account for post-filtering
 
     try:
         if ai_mode:
@@ -1619,10 +1651,6 @@ async def api_rss_brief_timeline(
     except Exception:
         rows = []
 
-    # Category whitelist settings
-    category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
-    category_whitelist = set(rules.get("category_whitelist") or [])
-
     items_all: List[Dict[str, Any]] = []
     seen_urls = set()
     for r in rows:
@@ -1670,6 +1698,9 @@ async def api_rss_brief_timeline(
         it["published_at"] = int(published_at)
         items_all.append(it)
 
+    # Store in cache
+    brief_timeline_cache.set(items_all, cache_config)
+
     sliced = items_all[off : off + lim]
     return UnicodeJSONResponse(
         content={
@@ -1692,22 +1723,37 @@ async def api_rss_explore_timeline(
     offset: int = Query(0, ge=0),
 ):
     """API: Explore timeline - all RSS entries sorted by published_at DESC."""
+    import time as time_module
+    
     conn = _get_online_db_conn()
     
     lim = min(int(limit or 50), 500)
     off = int(offset or 0)
     
+    # Try to get from cache first (no config check needed for explore)
+    cached_items = explore_timeline_cache.get()
+    if cached_items is not None and off + lim <= len(cached_items):
+        # Cache hit - slice and return
+        sliced = cached_items[off:off + lim]
+        return UnicodeJSONResponse(
+            content={
+                "offset": off,
+                "limit": lim,
+                "items": sliced,
+                "total_returned": len(sliced),
+                "cached": True,
+            }
+        )
+    
+    # Cache miss - fetch from database
     # Date range validation: 2000-01-01 to current time + 1 year
-    # Timestamp for 2000-01-01: 946684800
-    # Timestamp for current + 1 year (reasonable upper bound)
-    import time
     min_timestamp = 946684800  # 2000-01-01
-    max_timestamp = int(time.time()) + (365 * 24 * 3600)  # Current + 1 year
+    max_timestamp = int(time_module.time()) + (365 * 24 * 3600)  # Current + 1 year
     
     try:
         # Optimized query: fetch entries with join to filter disabled sources
-        # Fetch extra records to account for deduplication
-        fetch_limit = lim * 2  # Over-fetch to account for duplicates
+        # Fetch 2000 to build cache of 1000 items (accounting for dedup)
+        fetch_limit = 2000
         cur = conn.execute(
             """
             SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
@@ -1719,9 +1765,9 @@ async def api_rss_explore_timeline(
               AND e.published_at >= ?
               AND e.published_at <= ?
             ORDER BY e.published_at DESC, e.id DESC
-            LIMIT ? OFFSET ?
+            LIMIT ?
             """,
-            (min_timestamp, max_timestamp, fetch_limit, off),
+            (min_timestamp, max_timestamp, fetch_limit),
         )
         rows = cur.fetchall() or []
     except Exception:
@@ -1741,12 +1787,13 @@ async def api_rss_explore_timeline(
         except Exception:
             pass
     
-    items: List[Dict[str, Any]] = []
+    items_all: List[Dict[str, Any]] = []
     seen_titles: set = set()  # Track titles for deduplication
+    max_cache_items = 1000  # Max items to cache (20 cards × 50 items)
     
     for r in rows:
-        # Stop if we have enough items after deduplication
-        if len(items) >= lim:
+        # Stop after reaching max cache size
+        if len(items_all) >= max_cache_items:
             break
             
         sid = str(r[0] or "").strip()
@@ -1775,14 +1822,19 @@ async def api_rss_explore_timeline(
             created_at=created_at,
         )
         it["published_at"] = published_at
-        items.append(it)
+        items_all.append(it)
     
+    # Store in cache
+    explore_timeline_cache.set(items_all)
+    
+    # Return requested slice
+    sliced = items_all[off:off + lim]
     return UnicodeJSONResponse(
         content={
             "offset": off,
             "limit": lim,
-            "items": items,
-            "total_returned": len(items),
+            "items": sliced,
+            "total_returned": len(sliced),
         }
     )
 
