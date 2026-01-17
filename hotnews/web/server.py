@@ -1203,7 +1203,7 @@ def _mb_load_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
         rules["category_whitelist_enabled"] = True
     cw = rules.get("category_whitelist")
     if not isinstance(cw, list):
-        rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer"]
+        rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer", "ai"]
     else:
         rules["category_whitelist"] = [str(x or "").strip().lower() for x in cw if str(x or "").strip()]
     for k in ("topic_keywords", "depth_keywords", "negative_hard", "negative_soft", "negative_exempt_domains"):
@@ -1645,10 +1645,16 @@ async def api_rss_brief_timeline(
                     (raw_fetch,),
                 )
         rows = cur.fetchall() or []
+        print(f"DEBUG: api_rss_brief_timeline ai_mode={ai_mode} rows={len(rows)}")
     except Exception:
+        import traceback
+        traceback.print_exc()
         rows = []
 
-    items_all: List[Dict[str, Any]] = []
+    # Category whitelist settings
+    category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
+    category_whitelist = set(rules.get("category_whitelist") or [])
+    print(f"DEBUG: whitelist_enabled={category_whitelist_enabled} whitelist={list(category_whitelist)}")
     seen_urls = set()
     for r in rows:
         if ai_mode:
