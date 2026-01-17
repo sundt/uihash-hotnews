@@ -6,7 +6,7 @@ const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
-const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
+const INITIAL_CARDS = 10; // Load 10 cards initially (500 items) - dynamic like explore
 const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
 const NEW_CONTENT_WINDOW_SEC = 24 * 3600;
 

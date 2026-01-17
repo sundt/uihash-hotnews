@@ -123,7 +123,7 @@ PLATFORM_CATEGORIES = {
         "icon": "🏀",
         "news_limit": 10,
         "platforms": [
-            "nba-schedule", "hupu"
+            "nba-schedule"  # hupu removed - controlled by category_override
         ],
     },
     "explore": {
