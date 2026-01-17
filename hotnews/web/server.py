@@ -1655,6 +1655,8 @@ async def api_rss_brief_timeline(
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
     print(f"DEBUG: whitelist_enabled={category_whitelist_enabled} whitelist={list(category_whitelist)}")
+
+    items_all: List[Dict[str, Any]] = []
     seen_urls = set()
     for r in rows:
         if ai_mode:
