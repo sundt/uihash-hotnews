@@ -7,6 +7,7 @@ const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
 const INITIAL_CARDS = 10; // Load 10 cards initially (500 items) - dynamic like explore
+const MAX_CARDS = 20; // Maximum cards to load (1000 items) to enable caching
 const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
 const NEW_CONTENT_WINDOW_SEC = 24 * 3600;
 
@@ -246,6 +247,18 @@ function _attachObserver() {
  */
 async function _loadNextBatch() {
     if (_mbInFlight || _mbFinished) return;
+
+    // Check if we've reached max cards
+    const currentCardCount = Math.floor(_mbOffset / getItemsPerCard());
+    if (currentCardCount >= MAX_CARDS) {
+        _mbFinished = true;
+        const s = document.getElementById('mb-load-sentinel');
+        if (s) {
+            s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已达到最大显示数量</div>';
+            s.style.width = '40px';
+        }
+        return;
+    }
 
     _mbInFlight = true;
     try {
