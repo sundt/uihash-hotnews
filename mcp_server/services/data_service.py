@@ -228,12 +228,11 @@ class DataService:
 
 
         # [Inject Custom Source Data]
-        # Strategy: Fetch items per Custom source up to the requested limit
+        # Strategy: Fetch items per Custom source from rss_entries table (online.db)
+        # Custom sources now store data in rss_entries, not daily news.db
         
         try:
             from hotnews.web.db_online import get_online_db_conn
-            import sqlite3
-            import os
             
             # 1. Get enabled Custom sources from Online DB
             conn_online = get_online_db_conn(self.parser.project_root)
@@ -245,79 +244,56 @@ class DataService:
                 requested_ids = set(platforms)
                 custom_sources = [s for s in custom_sources if s[0] in requested_ids]
             
-            # 2. Connect to Daily News DB to fetch items
-            # We need to construct the path manually as we don't have a helper handy here
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            root = self.parser.project_root if self.parser and hasattr(self.parser, 'project_root') else '/app'
-            if not root: root = '/app'
-            db_path = f"{root}/output/{date_str}/news.db"
-            
-            if os.path.exists(db_path):
-                conn_daily = sqlite3.connect(db_path)
-                
-                for source_id, source_name in custom_sources:
-                    # Fetch last_crawl_time as well to use as fallback/primary sort
-                    items_sql = """
-                        SELECT title, url, published_at, last_crawl_time
-                        FROM news_items
-                        WHERE platform_id = ?
-                        ORDER BY last_crawl_time DESC
+            # 2. Fetch items from rss_entries table (same table as RSS sources)
+            for source_id, source_name in custom_sources:
+                try:
+                    items_cur = conn_online.execute("""
+                        SELECT title, url, published_at, created_at 
+                        FROM rss_entries 
+                        WHERE source_id = ? 
+                        ORDER BY created_at DESC 
                         LIMIT ?
-                    """
-                    # Use the requested 'limit' instead of fixed 50
-                    try:
-                        items_cur = conn_daily.execute(items_sql, (source_id, limit))
-                        items = items_cur.fetchall()
-                    except Exception:
-                        items = []
-                    
-                    for title, url, published_at, last_crawl_time in items:
-                        ts_str = ""
-                        
-                        # 1. Prioritize last_crawl_time (Discovery Time)
-                        # This ensures newly crawled items appear at the top, even if the content is old
-                        if last_crawl_time:
-                            lc_str = str(last_crawl_time).strip()
-                            if len(lc_str) <= 5 and (":" in lc_str or "-" in lc_str):
-                                # Fix short timestamp "HH:MM" -> "YYYY-MM-DD HH:MM:00"
-                                try:
-                                    today_prefix = datetime.now().strftime('%Y-%m-%d')
-                                    time_part = lc_str.replace('-', ':')
-                                    # Ensure it looks like time
-                                    if len(time_part.split(':')) >= 2:
-                                        ts_str = f"{today_prefix} {time_part}:00"
-                                    else:
-                                        ts_str = lc_str
-                                except:
-                                    ts_str = lc_str
-                            else:
-                                ts_str = lc_str
-
-                        # 2. Fallback to published_at if no crawl time
-                        if not ts_str and published_at and isinstance(published_at, int) and published_at > 946684800:
-                            try:
-                                ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
-                            except:
-                                pass
-                            
-                        # 3. Final fallback to now
-                        if not ts_str:
-                             ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        item = {
-                            "title": title,
-                            "platform": source_id,  # Use source_id directly as platform_id
-                            "platform_name": source_name or "Custom Source",
-                            "rank": 0,  # Custom sources have no rank
-                            "timestamp": ts_str
-                        }
-                        if include_url:
-                            item["url"] = url or ""
-                            item["mobileUrl"] = ""
-                        
-                        news_list.append(item)
+                    """, (source_id, per_platform_limit))
+                    entries = items_cur.fetchall()
+                except Exception:
+                    entries = []
                 
-                conn_daily.close()
+                for title, url, published_at, created_at in entries:
+                    ts_str = ""
+                    
+                    # 1. Try to use published_at (Unix timestamp)
+                    if published_at and isinstance(published_at, int) and published_at > 946684800:
+                        try:
+                            ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
+                        except:
+                            pass
+                    
+                    # 2. Fallback to created_at
+                    if not ts_str and created_at:
+                        try:
+                            if isinstance(created_at, int):
+                                ts_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                            else:
+                                ts_str = str(created_at)
+                        except:
+                            pass
+                        
+                    # 3. Final fallback to now
+                    if not ts_str:
+                         ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    item = {
+                        "title": title,
+                        "platform": source_id,  # Use source_id directly as platform_id
+                        "platform_name": source_name or "Custom Source",
+                        "rank": 0,  # Custom sources have no rank
+                        "timestamp": ts_str
+                    }
+                    if include_url:
+                        item["url"] = url or ""
+                        item["mobileUrl"] = ""
+                    
+                    news_list.append(item)
                     
         except ImportError:
             pass  # Ignore if module not found
