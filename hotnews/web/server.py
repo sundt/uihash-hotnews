@@ -3158,10 +3158,7 @@ async def api_admin_ai_test_rotation(request: Request):
     }
 
 
-def run_server_final(host: str = "0.0.0.0", port: int = 8080, auto_fetch: bool = False, interval: int = 30):
-    \"\"\"运行 Web 服务器 - 最终入口点\"\"\"
-    import uvicorn
-    uvicorn.run(app, host=host, port=port)
+# Note: run_server() is called from __main__ below
 
 
 if __name__ == "__main__":
