@@ -3040,7 +3040,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8080, auto_fetch: bool = False
 @app.get("/api/admin/ai/config", response_class=JSONResponse)
 async def api_admin_ai_config_get(request: Request):
     """Get entire AI configuration (providers + models)"""
-    _verify_admin_cookie(request)
+    _require_admin(request)
     mgr = AIModelManager.get_instance()
     if mgr._project_root is None:
         mgr.set_project_root(project_root)
@@ -3054,7 +3054,7 @@ async def api_admin_ai_config_get(request: Request):
 @app.post("/api/admin/ai/providers", response_class=JSONResponse)
 async def api_admin_ai_providers_save(request: Request, payload: Dict[str, Any] = Body(...)):
     """Save providers list (Full Replace)"""
-    _verify_admin_cookie(request)
+    _require_admin(request)
     providers = payload.get("providers")
     if not isinstance(providers, list):
         raise HTTPException(status_code=400, detail="Invalid providers format")
@@ -3069,7 +3069,7 @@ async def api_admin_ai_providers_save(request: Request, payload: Dict[str, Any] 
 @app.post("/api/admin/ai/models", response_class=JSONResponse)
 async def api_admin_ai_models_save(request: Request, payload: Dict[str, Any] = Body(...)):
     """Save models list (Full Replace)"""
-    _verify_admin_cookie(request)
+    _require_admin(request)
     models = payload.get("models")
     if not isinstance(models, list):
         raise HTTPException(status_code=400, detail="Invalid models format")
@@ -3086,7 +3086,7 @@ async def api_admin_ai_models_import(request: Request, payload: Dict[str, Any] =
     """Parse text and merge into existing models
     Format: ProviderName | ModelName | Priority | Expires
     """
-    _verify_admin_cookie(request)
+    _require_admin(request)
     text = payload.get("text", "")
     mode = payload.get("mode", "append") # append or replace
     
@@ -3142,7 +3142,7 @@ async def api_admin_ai_models_import(request: Request, payload: Dict[str, Any] =
 @app.post("/api/admin/ai/rotation_test", response_class=JSONResponse)
 async def api_admin_ai_test_rotation(request: Request):
     """Simulate rotation logic and return which model would be picked first"""
-    _verify_admin_cookie(request)
+    _require_admin(request)
     mgr = AIModelManager.get_instance()
     if mgr._project_root is None:
         mgr.set_project_root(project_root)
