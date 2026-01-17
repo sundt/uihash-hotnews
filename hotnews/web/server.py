@@ -1096,7 +1096,7 @@ def _mb_default_rules() -> Dict[str, Any]:
         "enabled": True,
         "drop_published_at_zero": True,
         "category_whitelist_enabled": True,  # 是否启用栏目过滤
-        "category_whitelist": ["explore", "tech_news", "ainews", "developer"],  # 允许的栏目ID列表
+        "category_whitelist": ["explore", "tech_news", "ainews", "developer", "ai"],  # 允许的栏目ID列表
         "topic_keywords": [
             "ai",
             "llm",
@@ -1547,6 +1547,10 @@ async def api_rss_brief_timeline(
 
     ai_mode = _mb_ai_enabled()
     
+    # Cache miss - fetch from database - Fetch slightly more to account for post-filtering
+    raw_fetch = max(5000, int((off + lim) * 20))
+    raw_fetch = min(20000, raw_fetch)
+
     # Category whitelist settings (needed for both cache check and response)
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
