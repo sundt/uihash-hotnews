@@ -118,19 +118,22 @@
 
                 <div style="flex: 1;"></div>
 
-                <button class="stat-card theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换护眼模式"
-                    style="cursor: pointer; border: 1px solid rgba(59, 130, 246, 0.18); background: rgba(59, 130, 246, 0.14) !important; color: rgba(37, 99, 235, 0.78);">
-                    🌙
-                </button>
-                <button class="category-settings-btn" onclick="openCategorySettings()" title="栏目设置">
-                    ⚙️ <span class="new-dot" id="categorySettingsNewBadge"></span>
-                </button>
-                <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="🔍 搜索新闻..."
-                    onkeyup="searchNews()"
-                    onkeydown="if(event && event.key==='Enter'){event.preventDefault();var q=(this.value||'').trim();if(q){window.location.href='/search?q='+encodeURIComponent(q);} }"
-                    style="flex: 1; min-width: 160px; max-width: 320px; font-size: 0.8rem; padding: 4px 8px;">
-                <button id="homeQuickSearchBtn" type="button" class="btn btn-sm btn-outline-primary"
-                    style="white-space: nowrap;">搜索</button>
+                <div class="header-right" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <button class="stat-card theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
+                        title="切换护眼模式"
+                        style="cursor: pointer; border: 1px solid rgba(59, 130, 246, 0.18); background: rgba(59, 130, 246, 0.14) !important; color: rgba(37, 99, 235, 0.78);">
+                        🌙
+                    </button>
+                    <button class="category-settings-btn" onclick="openCategorySettings()" title="栏目设置">
+                        ⚙️ <span class="new-dot" id="categorySettingsNewBadge"></span>
+                    </button>
+                    <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="🔍 搜索新闻..."
+                        onkeyup="searchNews()"
+                        onkeydown="if(event && event.key==='Enter'){event.preventDefault();var q=(this.value||'').trim();if(q){window.location.href='/search?q='+encodeURIComponent(q);} }"
+                        style="flex: 1; min-width: 160px; max-width: 320px; font-size: 0.8rem; padding: 4px 8px;">
+                    <button id="homeQuickSearchBtn" type="button" class="btn btn-sm btn-outline-primary"
+                        style="white-space: nowrap;">搜索</button>
+                </div>
             </div>
 
             <!-- 过滤面板 -->
