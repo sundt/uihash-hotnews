@@ -126,15 +126,18 @@ class TimelineCache:
 # Global cache instances
 brief_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
 explore_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
+my_tags_cache = TimelineCache(ttl_seconds=300, max_items=500)  # Cache for user's followed tags news
 
 
 def clear_all_timeline_caches() -> Dict[str, bool]:
     """Clear all timeline caches."""
     brief_timeline_cache.invalidate()
     explore_timeline_cache.invalidate()
+    my_tags_cache.invalidate()
     return {
         "brief_cleared": True,
         "explore_cleared": True,
+        "my_tags_cleared": True,
     }
 
 
@@ -150,5 +153,10 @@ def get_cache_status() -> Dict[str, Any]:
             "valid": explore_timeline_cache.is_valid,
             "item_count": explore_timeline_cache.item_count,
             "age_seconds": round(explore_timeline_cache.age_seconds, 1),
+        },
+        "my_tags": {
+            "valid": my_tags_cache.is_valid,
+            "item_count": my_tags_cache.item_count,
+            "age_seconds": round(my_tags_cache.age_seconds, 1),
         },
     }

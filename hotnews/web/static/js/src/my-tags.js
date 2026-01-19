@@ -1,9 +1,13 @@
 /**
  * My Tags Module
  * Handles the "我的标签" category tab which displays news filtered by user's followed tags.
+ * Implements both frontend (localStorage) and backend caching for fast loading.
  */
 
 const MY_TAGS_CATEGORY_ID = 'my-tags';
+const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
+const MY_TAGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 let myTagsLoaded = false;
 let myTagsLoading = false;
 
@@ -19,6 +23,58 @@ async function checkAuth() {
     } catch (e) {
         console.error('[MyTags] Auth check failed:', e);
         return null;
+    }
+}
+
+/**
+ * Get cached data from localStorage
+ */
+function getCachedData() {
+    try {
+        const cached = localStorage.getItem(MY_TAGS_CACHE_KEY);
+        if (!cached) return null;
+        
+        const data = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Check if cache is expired
+        if (!data.timestamp || (now - data.timestamp) > MY_TAGS_CACHE_TTL) {
+            localStorage.removeItem(MY_TAGS_CACHE_KEY);
+            return null;
+        }
+        
+        return data.tags;
+    } catch (e) {
+        console.error('[MyTags] Cache read error:', e);
+        localStorage.removeItem(MY_TAGS_CACHE_KEY);
+        return null;
+    }
+}
+
+/**
+ * Save data to localStorage cache
+ */
+function setCachedData(tags) {
+    try {
+        const data = {
+            tags: tags,
+            timestamp: Date.now(),
+        };
+        localStorage.setItem(MY_TAGS_CACHE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error('[MyTags] Cache write error:', e);
+    }
+}
+
+/**
+ * Clear cached data
+ */
+function clearCache() {
+    try {
+        localStorage.removeItem(MY_TAGS_CACHE_KEY);
+        console.log('[MyTags] Cache cleared');
+    } catch (e) {
+        console.error('[MyTags] Cache clear error:', e);
     }
 }
 
@@ -173,14 +229,6 @@ async function loadMyTags(force = false) {
 
     myTagsLoading = true;
 
-    // Show loading state
-    container.innerHTML = `
-        <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-            <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
-            <div style="font-size:16px;">加载中...</div>
-        </div>
-    `;
-
     try {
         // Check auth first
         const user = await checkAuth();
@@ -190,7 +238,32 @@ async function loadMyTags(force = false) {
             return;
         }
 
-        // Fetch followed news
+        // Try to load from frontend cache first (if not forcing refresh)
+        if (!force) {
+            const cachedTags = getCachedData();
+            if (cachedTags && cachedTags.length > 0) {
+                console.log('[MyTags] Loading from frontend cache');
+                renderTagsNews(container, cachedTags);
+                myTagsLoaded = true;
+                myTagsLoading = false;
+                
+                // Fetch fresh data in background to update cache
+                fetchAndUpdateCache().catch(e => {
+                    console.error('[MyTags] Background update failed:', e);
+                });
+                return;
+            }
+        }
+
+        // Show loading state
+        container.innerHTML = `
+            <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
+                <div style="font-size:16px;">加载中...</div>
+            </div>
+        `;
+
+        // Fetch followed news (will use backend cache if available)
         const result = await fetchFollowedNews();
 
         if (result.needsAuth) {
@@ -211,8 +284,20 @@ async function loadMyTags(force = false) {
             return;
         }
 
+        const tags = result.tags || [];
+        
+        // Log cache status
+        if (result.cached) {
+            console.log(`[MyTags] Loaded from backend cache (age: ${result.cache_age}s)`);
+        } else {
+            console.log('[MyTags] Loaded fresh data from database');
+        }
+
+        // Save to frontend cache
+        setCachedData(tags);
+
         // Render the tags
-        renderTagsNews(container, result.tags || []);
+        renderTagsNews(container, tags);
         myTagsLoaded = true;
 
     } catch (e) {
@@ -220,6 +305,21 @@ async function loadMyTags(force = false) {
         renderError(container, e.message);
     } finally {
         myTagsLoading = false;
+    }
+}
+
+/**
+ * Fetch and update cache in background
+ */
+async function fetchAndUpdateCache() {
+    try {
+        const result = await fetchFollowedNews();
+        if (result.ok && result.tags) {
+            setCachedData(result.tags);
+            console.log('[MyTags] Background cache update completed');
+        }
+    } catch (e) {
+        console.error('[MyTags] Background cache update error:', e);
     }
 }
 
@@ -259,6 +359,7 @@ if (typeof window !== 'undefined') {
     window.HotNews.myTags = {
         load: loadMyTags,
         init: init,
+        clearCache: clearCache,
     };
 }
 
@@ -269,4 +370,4 @@ if (document.readyState === 'loading') {
     init();
 }
 
-export { loadMyTags, init, handleTabSwitch };
+export { loadMyTags, init, handleTabSwitch, clearCache };

@@ -273,6 +273,60 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON rss_entry_tags(source_id, dedup_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_created ON rss_entry_tags(created_at DESC)")
 
+    # Tag candidates table (AI-discovered tags pending approval)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tag_candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tag_id TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            name_en TEXT,
+            type TEXT NOT NULL DEFAULT 'topic',
+            parent_id TEXT,
+            icon TEXT,
+            description TEXT,
+            
+            occurrence_count INTEGER DEFAULT 0,
+            first_seen_at INTEGER,
+            last_seen_at INTEGER,
+            avg_confidence REAL DEFAULT 0.0,
+            total_confidence REAL DEFAULT 0.0,
+            
+            status TEXT DEFAULT 'pending',
+            promoted_at INTEGER,
+            rejected_reason TEXT,
+            
+            sample_titles TEXT DEFAULT '[]',
+            
+            created_at INTEGER,
+            updated_at INTEGER
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_candidates_status ON tag_candidates(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_candidates_count ON tag_candidates(occurrence_count DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_candidates_confidence ON tag_candidates(avg_confidence DESC)")
+
+    # Tag evolution log table (tracks all tag lifecycle events)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tag_evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tag_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            old_value TEXT,
+            new_value TEXT,
+            reason TEXT,
+            metadata TEXT,
+            created_at INTEGER,
+            created_by TEXT DEFAULT 'system'
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_tag ON tag_evolution_log(tag_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_action ON tag_evolution_log(action)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_time ON tag_evolution_log(created_at DESC)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -326,6 +380,13 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("news_clicks", "tags_json", "TEXT DEFAULT '[]'")
     _ensure_column("news_clicks", "source_id", "TEXT DEFAULT ''")
     _ensure_column("news_clicks", "dedup_key", "TEXT DEFAULT ''")
+
+    # Dynamic tag discovery columns for tags table
+    _ensure_column("tags", "is_dynamic", "INTEGER DEFAULT 0")
+    _ensure_column("tags", "lifecycle", "TEXT DEFAULT 'active'")
+    _ensure_column("tags", "usage_count", "INTEGER DEFAULT 0")
+    _ensure_column("tags", "last_used_at", "INTEGER")
+    _ensure_column("tags", "promoted_from", "TEXT")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
