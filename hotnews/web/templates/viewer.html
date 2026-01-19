@@ -148,7 +148,7 @@
         <div class="category-tabs">
             {% set ns = namespace(active_set=false) %}
             {% for cat_id, category in data.categories.items() %}
-            {% set is_active = (not ns.active_set) and (cat_id != 'explore') %}
+            {% set is_active = (not ns.active_set) and (cat_id != 'explore') and (cat_id != 'my-tags') %}
             {% if is_active %}{% set ns.active_set = true %}{% endif %}
             <div class="category-tab {% if is_active %}active{% endif %}" data-category="{{ cat_id }}" draggable="false"
                 onclick="switchTab('{{ cat_id }}')">
@@ -166,10 +166,17 @@
         <div class="tab-content-area">
             {% set ns2 = namespace(active_set=false) %}
             {% for cat_id, category in data.categories.items() %}
-            {% set is_active_category = (not ns2.active_set) and (cat_id != 'explore') %}
+            {% set is_active_category = (not ns2.active_set) and (cat_id != 'explore') and (cat_id != 'my-tags') %}
             {% if is_active_category %}{% set ns2.active_set = true %}{% endif %}
             <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}">
-                {% if cat_id == 'explore' %}
+                {% if cat_id == 'my-tags' %}
+                <div class="platform-grid" id="myTagsGrid">
+                    <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                        <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
+                        <div style="font-size:16px;">加载中...</div>
+                    </div>
+                </div>
+                {% elif cat_id == 'explore' %}
                 <div class="platform-grid" id="trExploreGrid"></div>
                 {% elif cat_id == 'knowledge' %}
                 <div class="platform-grid" data-mb-injected="1">

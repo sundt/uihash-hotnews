@@ -10,6 +10,33 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 
 
+def _inject_my_tags_category(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Inject 'my-tags' as the first category (requires auth, loaded dynamically)."""
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+        if "my-tags" in cats:
+            return data
+
+        my_tags = {
+            "id": "my-tags",
+            "name": "我的标签",
+            "icon": "🏷️",
+            "platforms": {},
+            "news_count": 0,
+            "filtered_count": 0,
+            "is_new": False,
+            "requires_auth": True,
+            "is_dynamic": True,
+        }
+        # Insert at the beginning
+        data["categories"] = {"my-tags": my_tags, **cats}
+        return data
+    except Exception:
+        return data
+
+
 def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
@@ -259,6 +286,7 @@ async def render_viewer_page(
             )
 
         data = _inject_explore_category(data)
+        data = _inject_my_tags_category(data)
 
         if callable(merge_rss_subscription_news_into_data):
             try:
