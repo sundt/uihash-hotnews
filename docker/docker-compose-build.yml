@@ -139,6 +139,12 @@ services:
       # RSS 抓取超时配置
       - HOTNEWS_RSS_HTTP_READ_TIMEOUT_S=${HOTNEWS_RSS_HTTP_READ_TIMEOUT_S:-45}
       - HOTNEWS_RSS_HTTP_CONNECT_TIMEOUT_S=${HOTNEWS_RSS_HTTP_CONNECT_TIMEOUT_S:-15}
+      # OAuth 配置
+      - GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID:-}
+      - GITHUB_OAUTH_CLIENT_SECRET=${GITHUB_OAUTH_CLIENT_SECRET:-}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - HOTNEWS_SECURE_COOKIES=${HOTNEWS_SECURE_COOKIES:-0}
 
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
