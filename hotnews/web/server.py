@@ -3078,6 +3078,12 @@ async def on_startup():
     except Exception as e:
         print(f"⚠️ RSS scheduler start failed: {e}")
 
+    # Start tag auto-promotion task
+    try:
+        rss_scheduler.start_tag_promotion_task()
+    except Exception as e:
+        print(f"⚠️ Tag promotion task start failed: {e}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
