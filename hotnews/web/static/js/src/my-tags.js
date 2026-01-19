@@ -211,44 +211,67 @@ function createTagCard(tagData) {
  * Render the tags with news
  */
 function renderTagsNews(container, tagsData) {
+    console.log('[MyTags] renderTagsNews called, container:', container, 'tagsData:', tagsData);
+    
+    if (!container) {
+        console.error('[MyTags] renderTagsNews: container is null!');
+        return;
+    }
+    
     if (!tagsData || tagsData.length === 0) {
+        console.log('[MyTags] No tags data, showing empty state');
         renderEmptyState(container);
         return;
     }
 
+    console.log('[MyTags] Rendering', tagsData.length, 'tags');
     const cardsHtml = tagsData.map(tagData => createTagCard(tagData)).join('');
+    console.log('[MyTags] Generated HTML length:', cardsHtml.length);
     container.innerHTML = cardsHtml;
+    console.log('[MyTags] HTML inserted into container');
 }
 
 /**
  * Main load function for My Tags
  */
 async function loadMyTags(force = false) {
-    if (myTagsLoading) return;
-    if (myTagsLoaded && !force) return;
-
-    const container = document.getElementById('myTagsGrid');
-    if (!container) {
-        console.warn('[MyTags] Container #myTagsGrid not found');
+    console.log('[MyTags] loadMyTags called, force:', force, 'loading:', myTagsLoading, 'loaded:', myTagsLoaded);
+    
+    if (myTagsLoading) {
+        console.log('[MyTags] Already loading, skipping');
+        return;
+    }
+    if (myTagsLoaded && !force) {
+        console.log('[MyTags] Already loaded, skipping');
         return;
     }
 
+    const container = document.getElementById('myTagsGrid');
+    if (!container) {
+        console.error('[MyTags] Container #myTagsGrid not found!');
+        return;
+    }
+
+    console.log('[MyTags] Container found, starting load...');
     myTagsLoading = true;
 
     try {
         // Check auth first
+        console.log('[MyTags] Checking auth...');
         const user = await checkAuth();
         if (!user) {
+            console.log('[MyTags] User not authenticated');
             renderLoginRequired(container);
             myTagsLoading = false;
             return;
         }
+        console.log('[MyTags] User authenticated:', user);
 
         // Try to load from frontend cache first (if not forcing refresh)
         if (!force) {
             const cachedTags = getCachedData();
             if (cachedTags && cachedTags.length > 0) {
-                console.log('[MyTags] Loading from frontend cache');
+                console.log('[MyTags] Loading from frontend cache, tags:', cachedTags.length);
                 renderTagsNews(container, cachedTags);
                 myTagsLoaded = true;
                 myTagsLoading = false;
@@ -258,10 +281,13 @@ async function loadMyTags(force = false) {
                     console.error('[MyTags] Background update failed:', e);
                 });
                 return;
+            } else {
+                console.log('[MyTags] No valid cache found');
             }
         }
 
         // Show loading state
+        console.log('[MyTags] Showing loading state...');
         container.innerHTML = `
             <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
                 <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
@@ -270,27 +296,33 @@ async function loadMyTags(force = false) {
         `;
 
         // Fetch followed news (will use backend cache if available)
+        console.log('[MyTags] Fetching followed news from API...');
         const result = await fetchFollowedNews();
+        console.log('[MyTags] API response:', result);
 
         if (result.needsAuth) {
+            console.log('[MyTags] API returned needsAuth');
             renderLoginRequired(container);
             myTagsLoading = false;
             return;
         }
 
         if (result.error) {
+            console.error('[MyTags] API returned error:', result.error);
             renderError(container, result.error);
             myTagsLoading = false;
             return;
         }
 
         if (!result.ok) {
+            console.error('[MyTags] API returned not ok');
             renderError(container, '请求失败');
             myTagsLoading = false;
             return;
         }
 
         const tags = result.tags || [];
+        console.log('[MyTags] Got tags from API:', tags.length, 'tags');
         
         // Log cache status
         if (result.cached) {
@@ -303,8 +335,10 @@ async function loadMyTags(force = false) {
         setCachedData(tags);
 
         // Render the tags
+        console.log('[MyTags] Rendering tags...');
         renderTagsNews(container, tags);
         myTagsLoaded = true;
+        console.log('[MyTags] Load complete!');
 
     } catch (e) {
         console.error('[MyTags] Load error:', e);
