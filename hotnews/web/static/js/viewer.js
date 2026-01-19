@@ -905,7 +905,6 @@ function restoreActiveTabPlatformGridScroll(state) {
             setTimeout(applyOnce, 600);
         });
     });
-});
 }
 
 // === 用户菜单 ===
@@ -1000,7 +999,8 @@ async function renderUserMenu() {
             }
         }
 
-        headerRight.insertBefore(div, headerRight.firstChild);
+        // Insert as the last item (rightmost)
+        headerRight.appendChild(div);
 
     } catch (e) {
         console.error('Failed to render user menu:', e);
@@ -1895,3 +1895,8 @@ function applyCategoryConfigToData(serverCategories) {
 
     return result;
 }
+
+// Initialize components when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    renderUserMenu();
+});
