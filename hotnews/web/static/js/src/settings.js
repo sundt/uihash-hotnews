@@ -201,6 +201,22 @@ export const settings = {
             // ignore
         }
 
+        // Ensure 'my-tags' is at the front if it exists
+        try {
+            const myTagsIndex = merged.categoryOrder.indexOf('my-tags');
+            if (myTagsIndex > 0) {
+                // Remove from current position
+                merged.categoryOrder.splice(myTagsIndex, 1);
+                // Insert at the beginning
+                merged.categoryOrder.unshift('my-tags');
+            } else if (myTagsIndex === -1) {
+                // Not in the list, add it to the beginning
+                merged.categoryOrder.unshift('my-tags');
+            }
+        } catch (e) {
+            // ignore
+        }
+
         return merged;
     },
 
