@@ -172,17 +172,21 @@ function createTagCard(tagData) {
     const tagName = tag.name || tag.id;
 
     const newsListHtml = news.length > 0
-        ? news.map((item, idx) => `
+        ? news.map((item, idx) => {
+            // Format date using the same function as other news
+            const dateStr = TR.formatNewsDate ? TR.formatNewsDate(item.published_at) : '';
+            return `
             <li class="news-item" data-news-id="${item.id}">
                 <div class="news-item-content">
                     <span class="news-index">${idx + 1}</span>
                     <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer">
                         ${item.title}
                     </a>
-                    ${item.published_at ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${String(item.published_at).slice(0, 10)}</span>` : ''}
+                    ${dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${dateStr}</span>` : ''}
                 </div>
             </li>
-        `).join('')
+            `;
+        }).join('')
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
 
     return `

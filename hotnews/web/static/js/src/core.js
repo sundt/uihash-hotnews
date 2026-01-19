@@ -55,34 +55,83 @@ TR.formatUpdatedAt = formatUpdatedAt;
 
 /**
  * Format a news timestamp to YYYY-MM-DD for display.
+ * Validates date range and handles edge cases.
  * @param {string|number} ts - Timestamp string (YYYY-MM-DD HH:MM:SS) or unix seconds
  * @returns {string} Formatted date or empty string
  */
 export function formatNewsDate(ts) {
     if (ts == null || ts === '') return '';
+    
     try {
-        // Try unix timestamp (seconds)
+        // Define valid date range: 2000-01-01 to current time + 7 days
+        const MIN_TIMESTAMP = 946684800; // 2000-01-01 00:00:00 UTC (seconds)
+        const now = Date.now();
+        const MAX_TIMESTAMP = Math.floor(now / 1000) + (7 * 24 * 60 * 60); // Current + 7 days (seconds)
+        const MAX_MS = now + (7 * 24 * 60 * 60 * 1000); // Current + 7 days (milliseconds)
+        
+        // Try unix timestamp (seconds or milliseconds)
         const num = Number(ts);
         if (Number.isFinite(num) && num > 0) {
-            // Heuristic: if > 1e12, it's milliseconds
-            const ms = num > 1e12 ? num : num * 1000;
+            let ms;
+            
+            // Heuristic: if > 1e12, it's milliseconds; otherwise seconds
+            if (num > 1e12) {
+                // Milliseconds
+                if (num < 946684800000 || num > MAX_MS) {
+                    // Out of valid range
+                    return '';
+                }
+                ms = num;
+            } else {
+                // Seconds
+                if (num < MIN_TIMESTAMP || num > MAX_TIMESTAMP) {
+                    // Out of valid range
+                    return '';
+                }
+                ms = num * 1000;
+            }
+            
             const d = new Date(ms);
             if (!isNaN(d.getTime())) {
                 const YYYY = String(d.getFullYear());
                 const MM = String(d.getMonth() + 1).padStart(2, '0');
                 const DD = String(d.getDate()).padStart(2, '0');
+                
+                // Double-check the year is reasonable
+                const year = d.getFullYear();
+                if (year < 2000 || year > new Date().getFullYear() + 1) {
+                    return '';
+                }
+                
                 return `${YYYY}-${MM}-${DD}`;
             }
         }
+        
         // Try parsing string like "2026-01-12 19:30:00"
         const s = String(ts || '').trim();
         const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (m) {
+            const year = parseInt(m[1], 10);
+            const month = parseInt(m[2], 10);
+            const day = parseInt(m[3], 10);
+            
+            // Validate year range
+            const currentYear = new Date().getFullYear();
+            if (year < 2000 || year > currentYear + 1) {
+                return '';
+            }
+            
+            // Validate month and day
+            if (month < 1 || month > 12 || day < 1 || day > 31) {
+                return '';
+            }
+            
             return `${m[1]}-${m[2]}-${m[3]}`;
         }
     } catch (e) {
         // ignore
     }
+    
     return '';
 }
 

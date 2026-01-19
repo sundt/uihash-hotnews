@@ -1682,6 +1682,11 @@ async def api_rss_brief_timeline(
         traceback.print_exc()
         rows = []
 
+    # Define valid timestamp range: 2000-01-01 to current time + 7 days
+    import time as time_module
+    MIN_TIMESTAMP = 946684800  # 2000-01-01 00:00:00 UTC
+    MAX_TIMESTAMP = int(time_module.time()) + (7 * 24 * 60 * 60)  # Current + 7 days
+
     # Category whitelist settings
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
@@ -1712,6 +1717,9 @@ async def api_rss_brief_timeline(
         if u in seen_urls:
             continue
         if drop_zero and published_at <= 0:
+            continue
+        # Validate timestamp range
+        if published_at > 0 and (published_at < MIN_TIMESTAMP or published_at > MAX_TIMESTAMP):
             continue
         # Category whitelist filtering
         if category_whitelist_enabled and category_whitelist:
