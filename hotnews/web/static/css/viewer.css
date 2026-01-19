@@ -2143,6 +2143,86 @@
             box-shadow: none;
         }
 
+        /* === 统一的图标按钮样式 === */
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            line-height: 1;
+            cursor: pointer;
+            border: 1px solid rgba(59, 130, 246, 0.18);
+            background: rgba(59, 130, 246, 0.14) !important;
+            color: rgba(37, 99, 235, 0.78);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .icon-btn:hover {
+            background: rgba(59, 130, 246, 0.2) !important;
+            border-color: rgba(59, 130, 246, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 搜索按钮 */
+        .search-btn {
+            /* 继承 icon-btn 样式 */
+        }
+
+        /* 护眼模式按钮 */
+        .theme-toggle-btn {
+            /* 继承 icon-btn 样式 */
+        }
+
+        /* 栏目设置按钮 */
+        .category-settings-btn {
+            /* 继承 icon-btn 样式 */
+        }
+
+        /* 登录/用户按钮 */
+        .auth-btn {
+            /* 继承 icon-btn 样式 */
+        }
+
+        /* 已登录状态 */
+        .auth-btn.logged-in {
+            background: rgba(34, 197, 94, 0.14) !important;
+            border-color: rgba(34, 197, 94, 0.18);
+            color: rgba(22, 163, 74, 0.78);
+        }
+
+        .auth-btn.logged-in:hover {
+            background: rgba(34, 197, 94, 0.2) !important;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        /* 护眼模式下的按钮样式 */
+        body.eye-protection-mode .icon-btn {
+            background: rgba(59, 130, 246, 0.1) !important;
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        body.eye-protection-mode .icon-btn:hover {
+            background: rgba(59, 130, 246, 0.15) !important;
+        }
+
+        body.eye-protection-mode .auth-btn.logged-in {
+            background: rgba(34, 197, 94, 0.1) !important;
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        body.eye-protection-mode .auth-btn.logged-in:hover {
+            background: rgba(34, 197, 94, 0.15) !important;
+        }
+
         /* Update icon buttons to be smaller and square-ish */
         .stat-card.theme-toggle-btn,
         .category-settings-btn {

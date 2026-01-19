@@ -117,10 +117,11 @@ ready(function () {
 
     _setupMobileTopToggle();
 
-    // Initialize User Menu (Login/Register)
-    if (TR.auth && typeof TR.auth.renderUserMenu === 'function') {
-        TR.auth.renderUserMenu();
-    }
+    // Initialize User Menu (Login/Register) - DISABLED
+    // Now using icon button in HTML instead
+    // if (TR.auth && typeof TR.auth.renderUserMenu === 'function') {
+    //     TR.auth.renderUserMenu();
+    // }
 
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
