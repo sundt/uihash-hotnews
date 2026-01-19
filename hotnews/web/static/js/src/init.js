@@ -84,7 +84,7 @@ function _setupMobileTopToggle() {
 }
 
 // 初始化：检查用户配置并决定是否需要刷新数据
-ready(function() {
+ready(function () {
     try {
         const isE2E = (new URLSearchParams(window.location.search)).get('e2e') === '1';
         if (isE2E) {
@@ -116,6 +116,11 @@ ready(function() {
     }
 
     _setupMobileTopToggle();
+
+    // Initialize User Menu (Login/Register)
+    if (TR.auth && typeof TR.auth.renderUserMenu === 'function') {
+        TR.auth.renderUserMenu();
+    }
 
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
