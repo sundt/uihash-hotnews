@@ -2,9 +2,11 @@
  * My Tags Module
  * Handles the "我的标签" category tab which displays news filtered by user's followed tags.
  * Implements both frontend (localStorage) and backend caching for fast loading.
+ * Integrated with auth-state.js for reactive auth updates.
  */
 
 import { formatNewsDate } from './core.js';
+import { authState } from './auth-state.js';
 
 const MY_TAGS_CATEGORY_ID = 'my-tags';
 const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
@@ -14,18 +16,11 @@ let myTagsLoaded = false;
 let myTagsLoading = false;
 
 /**
- * Check if user is authenticated
+ * Check if user is authenticated using authState
  */
-async function checkAuth() {
-    try {
-        const res = await fetch('/api/auth/me');
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.ok && data.user ? data.user : null;
-    } catch (e) {
-        console.error('[MyTags] Auth check failed:', e);
-        return null;
-    }
+function checkAuth() {
+    // Use authState directly for instant check (sync)
+    return authState.getUser();
 }
 
 /**
@@ -35,16 +30,16 @@ function getCachedData() {
     try {
         const cached = localStorage.getItem(MY_TAGS_CACHE_KEY);
         if (!cached) return null;
-        
+
         const data = JSON.parse(cached);
         const now = Date.now();
-        
+
         // Check if cache is expired
         if (!data.timestamp || (now - data.timestamp) > MY_TAGS_CACHE_TTL) {
             localStorage.removeItem(MY_TAGS_CACHE_KEY);
             return null;
         }
-        
+
         return data.tags;
     } catch (e) {
         console.error('[MyTags] Cache read error:', e);
@@ -212,12 +207,12 @@ function createTagCard(tagData) {
  */
 function renderTagsNews(container, tagsData) {
     console.log('[MyTags] renderTagsNews called, container:', container, 'tagsData:', tagsData);
-    
+
     if (!container) {
         console.error('[MyTags] renderTagsNews: container is null!');
         return;
     }
-    
+
     if (!tagsData || tagsData.length === 0) {
         console.log('[MyTags] No tags data, showing empty state');
         renderEmptyState(container);
@@ -236,7 +231,7 @@ function renderTagsNews(container, tagsData) {
  */
 async function loadMyTags(force = false) {
     console.log('[MyTags] loadMyTags called, force:', force, 'loading:', myTagsLoading, 'loaded:', myTagsLoaded);
-    
+
     if (myTagsLoading) {
         console.log('[MyTags] Already loading, skipping');
         return;
@@ -256,9 +251,9 @@ async function loadMyTags(force = false) {
     myTagsLoading = true;
 
     try {
-        // Check auth first
+        // Check auth first (sync check from authState)
         console.log('[MyTags] Checking auth...');
-        const user = await checkAuth();
+        const user = checkAuth();
         if (!user) {
             console.log('[MyTags] User not authenticated');
             renderLoginRequired(container);
@@ -275,7 +270,7 @@ async function loadMyTags(force = false) {
                 renderTagsNews(container, cachedTags);
                 myTagsLoaded = true;
                 myTagsLoading = false;
-                
+
                 // Fetch fresh data in background to update cache
                 fetchAndUpdateCache().catch(e => {
                     console.error('[MyTags] Background update failed:', e);
@@ -323,7 +318,7 @@ async function loadMyTags(force = false) {
 
         const tags = result.tags || [];
         console.log('[MyTags] Got tags from API:', tags.length, 'tags');
-        
+
         // Log cache status
         if (result.cached) {
             console.log(`[MyTags] Loaded from backend cache (age: ${result.cache_age}s)`);
@@ -377,7 +372,32 @@ function handleTabSwitch(categoryId) {
  */
 function init() {
     console.log('[MyTags] Initializing module...');
-    
+
+    // Subscribe to auth state changes - reset and reload when auth changes
+    let previousUser = authState.getUser();
+    authState.subscribe((user) => {
+        const wasLoggedIn = !!previousUser;
+        const isLoggedIn = !!user;
+
+        if (wasLoggedIn !== isLoggedIn) {
+            console.log('[MyTags] Auth state changed, wasLoggedIn:', wasLoggedIn, 'isLoggedIn:', isLoggedIn);
+            // Reset loaded state
+            myTagsLoaded = false;
+            myTagsLoading = false;
+            // Clear cache on logout
+            if (!isLoggedIn) {
+                clearCache();
+            }
+            // Reload if my-tags tab is active
+            const activePane = document.querySelector('#tab-my-tags.active');
+            if (activePane) {
+                console.log('[MyTags] Tab is active, reloading...');
+                loadMyTags(true);
+            }
+        }
+        previousUser = user;
+    });
+
     // Listen for tab switch events
     window.addEventListener('tr_tab_switched', (event) => {
         const categoryId = event?.detail?.categoryId;
@@ -393,7 +413,7 @@ function init() {
         console.log('[MyTags] Tab is already active on page load');
         loadMyTags();
     }
-    
+
     // Add click listener to the my-tags tab button as a fallback
     // This ensures loading even if tr_tab_switched event doesn't fire
     const tryAttachClickListener = () => {
@@ -411,7 +431,7 @@ function init() {
                     }
                 }, 100);
             });
-            
+
             // Also add touchstart for better mobile/WeChat support
             tabButton.addEventListener('touchstart', () => {
                 console.log('[MyTags] Tab button touched (touchstart)');
@@ -429,10 +449,10 @@ function init() {
             setTimeout(tryAttachClickListener, 500);
         }
     };
-    
+
     // Try to attach click listener
     tryAttachClickListener();
-    
+
     // Add MutationObserver to watch for tab pane becoming active
     // This is a fallback for WeChat browser and other environments where events may not fire
     const observeTabActivation = () => {
@@ -441,7 +461,7 @@ function init() {
             console.warn('[MyTags] Tab pane not found for MutationObserver');
             return;
         }
-        
+
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
@@ -456,15 +476,15 @@ function init() {
                 }
             }
         });
-        
+
         observer.observe(tabPane, {
             attributes: true,
             attributeFilter: ['class']
         });
-        
+
         console.log('[MyTags] MutationObserver attached to tab pane');
     };
-    
+
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
 
