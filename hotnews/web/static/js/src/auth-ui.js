@@ -226,8 +226,11 @@ export class AuthButton {
     }
 
     _renderLoggedOut() {
+        // Use icon button style matching search/theme/settings buttons
         this.container.innerHTML = `
-            <a href="/api/auth/page" class="auth-login-btn">登录 / 注册</a>
+            <a href="/api/auth/page" class="icon-btn auth-icon-btn" title="登录 / 注册">
+                👤
+            </a>
         `;
         this._ensureStyles();
     }

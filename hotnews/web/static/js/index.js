@@ -369,7 +369,9 @@ import{a as C}from"./chunk-chunk-V4JU6BF7.js";import{a as l,b as E,c as b,d as t
                 </div>
             </div>
         `;let n=this.container.querySelector(".auth-avatar"),a=this.container.querySelector(".auth-dropdown"),i=this.container.querySelector(".auth-logout-btn");n&&a&&n.addEventListener("click",s=>{s.stopPropagation(),a.classList.toggle("show")}),i&&i.addEventListener("click",()=>this._handleLogout()),document.addEventListener("click",s=>{s.target.closest(".auth-user-menu")||a?.classList.remove("show")}),this._ensureStyles()}_renderLoggedOut(){this.container.innerHTML=`
-            <a href="/api/auth/page" class="auth-login-btn">\u767B\u5F55 / \u6CE8\u518C</a>
+            <a href="/api/auth/page" class="icon-btn auth-icon-btn" title="\u767B\u5F55 / \u6CE8\u518C">
+                \u{1F464}
+            </a>
         `,this._ensureStyles()}async _handleLogout(){Ne.show("\u6B63\u5728\u9000\u51FA...");try{await N.logout(),await new Promise(r=>setTimeout(r,100));let t=await N.verifyLogout();Ne.hide(),t?(Je.show("\u5DF2\u9000\u51FA\u767B\u5F55","success"),window.location.pathname.includes("/preferences")&&(window.location.href="/?logout="+Date.now())):(console.warn("[AuthButton] Logout verification failed, forcing reload"),window.location.href="/?logout="+Date.now())}catch(t){Ne.hide(),Je.show("\u9000\u51FA\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5","error"),console.error("[AuthButton] Logout error:",t)}}_ensureStyles(){if(document.getElementById("auth-button-styles"))return;let t=document.createElement("style");t.id="auth-button-styles",t.textContent=`
             .auth-user-menu {
                 position: relative;
