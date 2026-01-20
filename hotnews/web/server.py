@@ -1181,6 +1181,9 @@ def _mb_default_rules() -> Dict[str, Any]:
         "source_scores": {},
         "source_decay": {"second": 0.6, "third_plus": 0.3},
         "overrides": {"force_top": [], "force_blacklist": []},
+        # Tag-based filtering (new system)
+        "tag_whitelist_enabled": True,
+        "tag_whitelist": ["ai_ml"],  # AI/机器学习 tag
     }
 
 
@@ -1233,6 +1236,18 @@ def _mb_load_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
         rules["category_whitelist"] = ["explore", "tech_news", "ainews", "developer", "ai"]
     else:
         rules["category_whitelist"] = [str(x or "").strip().lower() for x in cw if str(x or "").strip()]
+    
+    # Tag whitelist settings (new system)
+    try:
+        rules["tag_whitelist_enabled"] = bool(rules.get("tag_whitelist_enabled", True))
+    except Exception:
+        rules["tag_whitelist_enabled"] = True
+    tw = rules.get("tag_whitelist")
+    if not isinstance(tw, list):
+        rules["tag_whitelist"] = ["ai_ml"]  # Default to AI/机器学习 tag
+    else:
+        rules["tag_whitelist"] = [str(x or "").strip().lower() for x in tw if str(x or "").strip()]
+    
     for k in ("topic_keywords", "depth_keywords", "negative_hard", "negative_soft", "negative_exempt_domains"):
         v = rules.get(k)
         if not isinstance(v, list):
@@ -1582,12 +1597,17 @@ async def api_rss_brief_timeline(
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
     
+    # Tag whitelist settings (new system)
+    tag_whitelist_enabled = bool(rules.get("tag_whitelist_enabled", True))
+    tag_whitelist = set(rules.get("tag_whitelist") or [])
+    
     # Build cache config for validation
     cache_config = {
         "drop_zero": drop_zero,
         "ai_mode": ai_mode,
         "rules_hash": hash(str(sorted(rules.items()))),
         "category_whitelist": tuple(sorted(category_whitelist)),
+        "tag_whitelist": tuple(sorted(tag_whitelist)),
     }
     
     # Try to get from cache
@@ -1603,6 +1623,8 @@ async def api_rss_brief_timeline(
                 "ai_enabled": bool(ai_mode),
                 "category_whitelist_enabled": bool(category_whitelist_enabled),
                 "category_whitelist": list(category_whitelist),
+                "tag_whitelist_enabled": bool(tag_whitelist_enabled),
+                "tag_whitelist": list(tag_whitelist),
                 "items": sliced,
                 "total_candidates": int(len(cached_items)),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1617,18 +1639,23 @@ async def api_rss_brief_timeline(
         if ai_mode:
             # [MODIFIED] Removed hardcoded category restriction. Fetch all 'include' items.
             # Added s.category to enable category whitelist filtering
+            # Added tag join for tag-based filtering
             if drop_zero:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
+                    SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, 
+                           COALESCE(s.name, ''), COALESCE(s.category, ''),
+                           GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
                     FROM rss_entries e
                     JOIN rss_entry_ai_labels l
                       ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
                     LEFT JOIN rss_sources s ON s.id = e.source_id
+                    LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
                     WHERE e.published_at > 0
                       AND l.action = 'include'
                       AND l.score >= 75
                       AND l.confidence >= 0.70
+                    GROUP BY e.source_id, e.dedup_key
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
@@ -1637,28 +1664,36 @@ async def api_rss_brief_timeline(
             else:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
+                    SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at, 
+                           COALESCE(s.name, ''), COALESCE(s.category, ''),
+                           GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
                     FROM rss_entries e
                     JOIN rss_entry_ai_labels l
                       ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
                     LEFT JOIN rss_sources s ON s.id = e.source_id
+                    LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
                     WHERE l.action = 'include'
                       AND l.score >= 75
                       AND l.confidence >= 0.70
+                    GROUP BY e.source_id, e.dedup_key
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
                     (raw_fetch,),
                 )
         else:
-            # Added s.category to enable category whitelist filtering
+            # Added s.category and tag_ids to enable filtering
             if drop_zero:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
+                    SELECT DISTINCT e.source_id, e.title, e.url, e.created_at, e.published_at, 
+                           COALESCE(s.name, ''), COALESCE(s.category, ''),
+                           GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
                     FROM rss_entries e
                     LEFT JOIN rss_sources s ON s.id = e.source_id
+                    LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
                     WHERE e.published_at > 0
+                    GROUP BY e.source_id, e.dedup_key
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
@@ -1667,9 +1702,13 @@ async def api_rss_brief_timeline(
             else:
                 cur = conn.execute(
                     """
-                    SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, ''), COALESCE(s.category, '')
+                    SELECT DISTINCT e.source_id, e.title, e.url, e.created_at, e.published_at, 
+                           COALESCE(s.name, ''), COALESCE(s.category, ''),
+                           GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
                     FROM rss_entries e
                     LEFT JOIN rss_sources s ON s.id = e.source_id
+                    LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
+                    GROUP BY e.source_id, e.dedup_key
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
@@ -1690,7 +1729,13 @@ async def api_rss_brief_timeline(
     # Category whitelist settings
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
+    
+    # Tag whitelist settings
+    tag_whitelist_enabled = bool(rules.get("tag_whitelist_enabled", True))
+    tag_whitelist = set(rules.get("tag_whitelist") or [])
+    
     print(f"DEBUG: whitelist_enabled={category_whitelist_enabled} whitelist={list(category_whitelist)}")
+    print(f"DEBUG: tag_whitelist_enabled={tag_whitelist_enabled} tag_whitelist={list(tag_whitelist)}")
 
     items_all: List[Dict[str, Any]] = []
     seen_urls = set()
@@ -1703,6 +1748,7 @@ async def api_rss_brief_timeline(
             published_at = int(r[5] or 0)
             sname = str(r[6] or "")
             scategory = str(r[7] or "").strip().lower()
+            tag_ids_str = str(r[8] or "").strip()
         else:
             sid = str(r[0] or "").strip()
             title = str(r[1] or "")
@@ -1711,6 +1757,13 @@ async def api_rss_brief_timeline(
             published_at = int(r[4] or 0)
             sname = str(r[5] or "")
             scategory = str(r[6] or "").strip().lower()
+            tag_ids_str = str(r[7] or "").strip()
+        
+        # Parse tag_ids
+        tag_ids = set()
+        if tag_ids_str:
+            tag_ids = set(t.strip().lower() for t in tag_ids_str.split(',') if t.strip())
+        
         u = url.strip()
         if not u:
             continue
@@ -1721,10 +1774,17 @@ async def api_rss_brief_timeline(
         # Validate timestamp range
         if published_at > 0 and (published_at < MIN_TIMESTAMP or published_at > MAX_TIMESTAMP):
             continue
-        # Category whitelist filtering
-        if category_whitelist_enabled and category_whitelist:
+        
+        # Tag whitelist filtering (new system - takes priority)
+        if tag_whitelist_enabled and tag_whitelist:
+            # Check if any of the news tags match the whitelist
+            if not tag_ids or not tag_ids.intersection(tag_whitelist):
+                continue
+        # Category whitelist filtering (fallback for untagged content)
+        elif category_whitelist_enabled and category_whitelist:
             if scategory not in category_whitelist:
                 continue
+        
         if not ai_mode:
             ok, _ = _mb_eval(rules=rules, source_id=sid, source_name=sname, title=title, url=u)
             if not ok:
@@ -1754,6 +1814,8 @@ async def api_rss_brief_timeline(
             "ai_enabled": bool(ai_mode),
             "category_whitelist_enabled": bool(category_whitelist_enabled),
             "category_whitelist": list(category_whitelist),
+            "tag_whitelist_enabled": bool(tag_whitelist_enabled),
+            "tag_whitelist": list(tag_whitelist),
             "items": sliced,
             "total_candidates": int(len(items_all)),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
