@@ -322,7 +322,8 @@ async def render_viewer_page(
 
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
-        data = _inject_source_subscription_category(data)
+        # Removed: source-subscription tab is now integrated into user settings page
+        # data = _inject_source_subscription_category(data)
 
         if callable(merge_rss_subscription_news_into_data):
             try:
