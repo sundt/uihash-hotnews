@@ -2362,8 +2362,9 @@ async def api_news_click(request: Request):
         except Exception:
             pass
         
-        # Get tags for this entry if source_id and dedup_key are provided
+        # Get tags for this entry
         tags_json = "[]"
+        # First try with source_id and dedup_key if provided
         if source_id and dedup_key:
             try:
                 cur = conn.execute(
@@ -2372,6 +2373,28 @@ async def api_news_click(request: Request):
                 )
                 tags = [r[0] for r in cur.fetchall() or []]
                 tags_json = _json.dumps(tags)
+            except Exception:
+                pass
+        
+        # If no tags found and we have news_id, try to look up by news_id
+        if tags_json == "[]" and news_id:
+            try:
+                # Get source_id and dedup_key from rss_entries using news_id
+                cur = conn.execute(
+                    "SELECT source_id, dedup_key FROM rss_entries WHERE id = ?",
+                    (news_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    source_id = row[0]
+                    dedup_key = row[1]
+                    # Now get tags
+                    cur = conn.execute(
+                        "SELECT tag_id FROM rss_entry_tags WHERE source_id = ? AND dedup_key = ?",
+                        (source_id, dedup_key)
+                    )
+                    tags = [r[0] for r in cur.fetchall() or []]
+                    tags_json = _json.dumps(tags)
             except Exception:
                 pass
         
