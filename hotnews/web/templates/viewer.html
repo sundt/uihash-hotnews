@@ -180,6 +180,23 @@
                         <div style="font-size:16px;">加载中...</div>
                     </div>
                 </div>
+                {% elif cat_id == 'source-subscription' %}
+                <div class="source-sub-container">
+                    <div class="source-sub-search">
+                        <input type="text" id="sourceSubSearch" class="source-sub-search-input"
+                            placeholder="🔍 搜索 RSS 源或自定义源...">
+                    </div>
+                    <div class="source-sub-view-toggle">
+                        <button class="source-view-btn active" data-view="my-subscriptions">我的订阅</button>
+                        <button class="source-view-btn" data-view="discover">发现更多</button>
+                    </div>
+                    <div class="platform-grid" id="sourceSubGrid">
+                        <div class="source-sub-empty">
+                            <div class="empty-icon">📡</div>
+                            <div class="empty-title">加载中...</div>
+                        </div>
+                    </div>
+                </div>
                 {% elif cat_id == 'explore' %}
                 <div class="platform-grid" id="trExploreGrid"></div>
                 {% elif cat_id == 'knowledge' %}

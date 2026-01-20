@@ -37,6 +37,40 @@ def _inject_my_tags_category(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
 
 
+def _inject_source_subscription_category(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Inject 'source-subscription' category tab for subscribed sources."""
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+        if "source-subscription" in cats:
+            return data
+
+        source_sub = {
+            "id": "source-subscription",
+            "name": "订阅",
+            "icon": "📡",
+            "platforms": {},
+            "news_count": 0,
+            "filtered_count": 0,
+            "is_new": False,
+            "requires_auth": True,
+            "is_dynamic": True,
+        }
+        # Insert after my-tags
+        new_cats = {}
+        for k, v in cats.items():
+            new_cats[k] = v
+            if k == "my-tags":
+                new_cats["source-subscription"] = source_sub
+        if "source-subscription" not in new_cats:
+            new_cats["source-subscription"] = source_sub
+        data["categories"] = new_cats
+        return data
+    except Exception:
+        return data
+
+
 def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
@@ -288,6 +322,7 @@ async def render_viewer_page(
 
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
+        data = _inject_source_subscription_category(data)
 
         if callable(merge_rss_subscription_news_into_data):
             try:
