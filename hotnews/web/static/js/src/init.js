@@ -4,6 +4,8 @@
  */
 
 import { TR, ready } from './core.js';
+import { authState } from './auth-state.js';
+import { AuthButton } from './auth-ui.js';
 
 const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'hotnews_mobile_top_collapsed_v1';
 const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
@@ -117,11 +119,34 @@ ready(function () {
 
     _setupMobileTopToggle();
 
-    // Initialize User Menu (Login/Register) - DISABLED
-    // Now using icon button in HTML instead
-    // if (TR.auth && typeof TR.auth.renderUserMenu === 'function') {
-    //     TR.auth.renderUserMenu();
-    // }
+    // Initialize Auth State Manager
+    (async () => {
+        try {
+            // Check for OAuth login callback
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('login')) {
+                console.log('[Init] OAuth login callback detected');
+                await authState.onLogin();
+                // Clean up URL
+                urlParams.delete('login');
+                const newUrl = urlParams.toString()
+                    ? `${window.location.pathname}?${urlParams}`
+                    : window.location.pathname;
+                window.history.replaceState({}, '', newUrl);
+            } else {
+                // Normal init
+                await authState.init();
+            }
+
+            // Initialize AuthButton component if container exists
+            const authContainer = document.getElementById('authButtonContainer');
+            if (authContainer) {
+                new AuthButton(authContainer);
+            }
+        } catch (e) {
+            console.error('[Init] Auth initialization failed:', e);
+        }
+    })();
 
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {

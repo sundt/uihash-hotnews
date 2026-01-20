@@ -123,22 +123,20 @@
                     <button class="icon-btn search-btn" onclick="window.location.href='/search'" title="搜索">
                         🔍
                     </button>
-                    
+
                     <!-- 护眼模式按钮 -->
                     <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
                         title="切换护眼模式">
                         🌙
                     </button>
-                    
+
                     <!-- 栏目设置按钮 -->
                     <button class="icon-btn category-settings-btn" onclick="openCategorySettings()" title="栏目设置">
                         ⚙️ <span class="new-dot" id="categorySettingsNewBadge"></span>
                     </button>
-                    
-                    <!-- 登录/用户按钮 -->
-                    <button class="icon-btn auth-btn" id="authBtn" onclick="handleAuthClick()" title="登录/注册">
-                        👤
-                    </button>
+
+                    <!-- 登录/用户按钮 - 由 AuthButton 组件动态渲染 -->
+                    <div id="authButtonContainer" class="auth-button-container"></div>
                 </div>
             </div>
 
@@ -302,52 +300,6 @@
     </div>
 
     <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
-    <script>
-        // 处理登录/用户按钮点击
-        async function handleAuthClick() {
-            try {
-                const res = await fetch('/api/auth/me');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.ok && data.user) {
-                        // 已登录，跳转到用户设置
-                        window.location.href = '/api/user/preferences/page';
-                        return;
-                    }
-                }
-            } catch (e) {
-                console.error('Auth check failed:', e);
-            }
-            // 未登录，跳转到登录页
-            window.location.href = '/api/auth/page';
-        }
-        
-        // 更新登录按钮状态
-        async function updateAuthButton() {
-            try {
-                const res = await fetch('/api/auth/me');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.ok && data.user) {
-                        const btn = document.getElementById('authBtn');
-                        if (btn) {
-                            btn.title = '我的设置';
-                            btn.classList.add('logged-in');
-                        }
-                    }
-                }
-            } catch (e) {
-                // Ignore
-            }
-        }
-        
-        // 页面加载时更新按钮状态
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', updateAuthButton);
-        } else {
-            updateAuthButton();
-        }
-    </script>
     <script>
         (function () {
             try {
