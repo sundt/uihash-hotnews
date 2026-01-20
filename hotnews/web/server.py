@@ -62,6 +62,7 @@ _preferences_router = None
 _source_subscription_router = None
 _keyword_router = None
 _tag_candidate_admin_router = None
+_wechat_admin_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -99,6 +100,9 @@ try:
     
     from hotnews.kernel.user import keyword_api
     _keyword_router = keyword_api.router
+    
+    from hotnews.kernel.admin import wechat_admin
+    _wechat_admin_router = wechat_admin.router
     
     from hotnews.kernel.admin import tag_candidate_admin
     _tag_candidate_admin_router = tag_candidate_admin.router
@@ -433,6 +437,7 @@ if _auth_router: app.include_router(_auth_router)
 if _preferences_router: app.include_router(_preferences_router)
 if _source_subscription_router: app.include_router(_source_subscription_router)
 if _keyword_router: app.include_router(_keyword_router)
+if _wechat_admin_router: app.include_router(_wechat_admin_router)
 if _tag_candidate_admin_router: 
     app.include_router(_tag_candidate_admin_router)
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router
@@ -3194,6 +3199,16 @@ async def on_startup():
     except Exception as e:
         print(f"⚠️ Tag promotion task start failed: {e}")
 
+    # Start WeChat MP article scheduler
+    try:
+        from hotnews.kernel.scheduler.wechat_scheduler import start_wechat_scheduler
+        start_wechat_scheduler(project_root)
+        print("✅ WeChat MP scheduler started (controlled by HOTNEWS_WECHAT_SCHEDULER_ENABLED)")
+    except ImportError:
+        pass  # Kernel module not available
+    except Exception as e:
+        print(f"⚠️ WeChat scheduler start failed: {e}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -3205,6 +3220,15 @@ async def on_shutdown():
         await rss_scheduler.stop()
     except Exception as e:
         print(f"⚠️ RSS scheduler stop failed: {e}")
+    
+    # Stop WeChat MP scheduler
+    try:
+        from hotnews.kernel.scheduler.wechat_scheduler import stop_wechat_scheduler
+        stop_wechat_scheduler()
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"⚠️ WeChat scheduler stop failed: {e}")
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8080, auto_fetch: bool = False, interval: int = 30):

@@ -206,6 +206,47 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_keywords_user ON user_keywords(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_keywords_enabled ON user_keywords(user_id, enabled)")
     
+    # ========== WeChat MP (公众号) Tables ==========
+    
+    # 微信公众号认证信息（每个用户一份）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wechat_mp_auth (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            cookie_encrypted TEXT NOT NULL,
+            token TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            expires_at INTEGER,
+            status TEXT DEFAULT 'valid',
+            last_error TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_auth_user ON wechat_mp_auth(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_auth_status ON wechat_mp_auth(status)")
+    
+    # 用户订阅的公众号
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wechat_mp_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            fakeid TEXT NOT NULL,
+            nickname TEXT NOT NULL,
+            round_head_img TEXT,
+            signature TEXT,
+            subscribed_at INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, fakeid)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_subs_user ON wechat_mp_subscriptions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_subs_fakeid ON wechat_mp_subscriptions(fakeid)")
+    
     conn.commit()
     _user_db_conn = conn
     return conn

@@ -102,6 +102,72 @@ async function fetchFollowedNews() {
 }
 
 /**
+ * Check WeChat auth expiration and show warning if needed
+ */
+async function checkWechatAuthExpiration() {
+    try {
+        const res = await fetch('/api/wechat/auth/expiration-warning');
+        if (!res.ok) return null;
+        
+        const data = await res.json();
+        if (data.ok && data.show_warning) {
+            return data;
+        }
+        return null;
+    } catch (e) {
+        console.error('[MyTags] WeChat auth check failed:', e);
+        return null;
+    }
+}
+
+/**
+ * Render WeChat auth expiration warning banner
+ */
+function renderWechatWarningBanner(container, warningData) {
+    if (!warningData || !warningData.show_warning) return;
+    
+    const isExpired = warningData.warning_type === 'expired';
+    const bgColor = isExpired ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)';
+    const borderColor = isExpired ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
+    const textColor = isExpired ? '#dc2626' : '#d97706';
+    const icon = isExpired ? '⚠️' : '⏰';
+    
+    const bannerHtml = `
+        <div class="wechat-auth-warning" style="
+            background: ${bgColor};
+            border: 1px solid ${borderColor};
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        ">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:18px;">${icon}</span>
+                <span style="color:${textColor};font-size:14px;">${warningData.message}</span>
+            </div>
+            <a href="/api/user/preferences/page" 
+               style="
+                   padding: 6px 12px;
+                   background: ${isExpired ? '#dc2626' : '#d97706'};
+                   color: white;
+                   text-decoration: none;
+                   border-radius: 6px;
+                   font-size: 12px;
+                   white-space: nowrap;
+               ">
+                ${isExpired ? '重新配置' : '去更新'}
+            </a>
+        </div>
+    `;
+    
+    // Insert at the beginning of the container
+    container.insertAdjacentHTML('afterbegin', bannerHtml);
+}
+
+/**
  * Render the empty state when user has no followed tags
  */
 function renderEmptyState(container) {
@@ -334,6 +400,13 @@ async function loadMyTags(force = false) {
         renderTagsNews(container, tags);
         myTagsLoaded = true;
         console.log('[MyTags] Load complete!');
+        
+        // Check WeChat auth expiration and show warning if needed
+        const wechatWarning = await checkWechatAuthExpiration();
+        if (wechatWarning) {
+            console.log('[MyTags] WeChat auth warning:', wechatWarning);
+            renderWechatWarningBanner(container, wechatWarning);
+        }
 
     } catch (e) {
         console.error('[MyTags] Load error:', e);

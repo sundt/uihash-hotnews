@@ -327,6 +327,29 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_action ON tag_evolution_log(action)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_time ON tag_evolution_log(created_at DESC)")
 
+    # ========== WeChat MP (公众号) Articles Cache ==========
+    # 公众号文章缓存（多用户共享）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wechat_mp_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fakeid TEXT NOT NULL,
+            dedup_key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            url TEXT NOT NULL UNIQUE,
+            digest TEXT,
+            cover_url TEXT,
+            publish_time INTEGER NOT NULL,
+            fetched_at INTEGER NOT NULL,
+            mp_nickname TEXT,
+            UNIQUE(fakeid, dedup_key)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_fakeid_time ON wechat_mp_articles(fakeid, publish_time DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_dedup ON wechat_mp_articles(dedup_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_publish ON wechat_mp_articles(publish_time DESC)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
