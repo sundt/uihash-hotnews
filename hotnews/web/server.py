@@ -62,6 +62,7 @@ _preferences_router = None
 _source_subscription_router = None
 _keyword_router = None
 _tag_candidate_admin_router = None
+_user_stats_admin_router = None
 _wechat_admin_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
@@ -106,6 +107,9 @@ try:
     
     from hotnews.kernel.admin import tag_candidate_admin
     _tag_candidate_admin_router = tag_candidate_admin.router
+    
+    from hotnews.kernel.admin import user_stats_admin
+    _user_stats_admin_router = user_stats_admin.router
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -442,6 +446,7 @@ if _tag_candidate_admin_router:
     app.include_router(_tag_candidate_admin_router)
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router
     app.include_router(evolution_router)
+if _user_stats_admin_router: app.include_router(_user_stats_admin_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
