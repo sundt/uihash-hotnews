@@ -350,6 +350,86 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_dedup ON wechat_mp_articles(dedup_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_publish ON wechat_mp_articles(publish_time DESC)")
 
+    # ========== WeChat MP Stats (智能调度统计) ==========
+    # 公众号抓取统计，用于智能调度
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wechat_mp_stats (
+            fakeid TEXT PRIMARY KEY,
+            nickname TEXT,
+            
+            -- 更新频率分类
+            frequency_type TEXT DEFAULT 'daily',
+            cadence TEXT DEFAULT 'W2',
+            
+            -- 发布时间统计（用于预测）
+            avg_publish_hour REAL,
+            std_publish_hour REAL,
+            avg_interval_hours REAL,
+            
+            -- 调度状态
+            next_due_at INTEGER DEFAULT 0,
+            last_check_at INTEGER DEFAULT 0,
+            last_article_at INTEGER DEFAULT 0,
+            
+            -- 失败处理
+            fail_count INTEGER DEFAULT 0,
+            backoff_until INTEGER DEFAULT 0,
+            last_error TEXT,
+            
+            -- 统计数据
+            total_articles INTEGER DEFAULT 0,
+            check_count INTEGER DEFAULT 0,
+            hit_count INTEGER DEFAULT 0,
+            
+            created_at INTEGER,
+            updated_at INTEGER
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_stats_next_due ON wechat_mp_stats(next_due_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_stats_cadence ON wechat_mp_stats(cadence)")
+
+    # ========== Source Stats (RSS/Custom 智能调度统计) ==========
+    # 统一的源抓取统计表，用于 RSS 源和自定义源的智能调度
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS source_stats (
+            source_id TEXT PRIMARY KEY,
+            source_type TEXT NOT NULL DEFAULT 'rss',
+            
+            -- 更新频率分类
+            frequency_type TEXT DEFAULT 'daily',
+            cadence TEXT DEFAULT 'P2',
+            
+            -- 发布时间统计（用于预测）
+            avg_publish_hour REAL,
+            std_publish_hour REAL,
+            
+            -- 调度状态
+            next_due_at INTEGER DEFAULT 0,
+            last_check_at INTEGER DEFAULT 0,
+            last_article_at INTEGER DEFAULT 0,
+            
+            -- 失败处理
+            fail_count INTEGER DEFAULT 0,
+            backoff_until INTEGER DEFAULT 0,
+            last_error TEXT,
+            
+            -- 统计数据
+            check_count INTEGER DEFAULT 0,
+            hit_count INTEGER DEFAULT 0,
+            
+            created_at INTEGER,
+            updated_at INTEGER
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_next_due ON source_stats(next_due_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_cadence ON source_stats(cadence)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_type ON source_stats(source_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_type_due ON source_stats(source_type, next_due_at)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -358,6 +438,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
         except Exception:
             return
+
+    # Add publish_hour column to wechat_mp_articles for time analysis
+    _ensure_column("wechat_mp_articles", "publish_hour", "INTEGER")
 
     _ensure_column("rss_sources", "category", "TEXT DEFAULT ''")
     _ensure_column("rss_sources", "cadence", "TEXT NOT NULL DEFAULT 'P4'")
