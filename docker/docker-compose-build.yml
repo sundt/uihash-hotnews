@@ -149,6 +149,11 @@ services:
       - HOTNEWS_SECURE_COOKIES=${HOTNEWS_SECURE_COOKIES:-0}
       - HOTNEWS_BASE_URL=${HOTNEWS_BASE_URL:-}
       - HOTNEWS_OAUTH_PROXY=${HOTNEWS_OAUTH_PROXY:-}
+      # 邮件配置
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}
 
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
