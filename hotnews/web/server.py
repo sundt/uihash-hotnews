@@ -1759,6 +1759,7 @@ async def api_rss_brief_timeline(
 
     items_all: List[Dict[str, Any]] = []
     seen_urls = set()
+    seen_titles = set()  # Dedupe by title
     for r in rows:
         if ai_mode:
             sid = str(r[0] or "").strip()
@@ -1789,6 +1790,10 @@ async def api_rss_brief_timeline(
             continue
         if u in seen_urls:
             continue
+        # Dedupe by normalized title
+        title_normalized = title.strip().lower()
+        if title_normalized and title_normalized in seen_titles:
+            continue
         if drop_zero and published_at <= 0:
             continue
         # Validate timestamp range
@@ -1810,6 +1815,8 @@ async def api_rss_brief_timeline(
             if not ok:
                 continue
         seen_urls.add(u)
+        if title_normalized:
+            seen_titles.add(title_normalized)
         pid = f"rss-{sid}" if sid else "rss-unknown"
         it = _rss_row_to_item(
             platform_id=pid,
