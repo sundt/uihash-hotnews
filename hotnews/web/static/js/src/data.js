@@ -52,10 +52,11 @@ function _renderSkeletonNewsItemsHtml(count) {
     return html;
 }
 
-function _createNewsLi(n, idx, platformId) {
+function _createNewsLi(n, idx, platformId, platformName) {
     const li = document.createElement('li');
     li.className = 'news-item';
-    li.dataset.newsId = String(n?.stable_id || '');
+    const newsId = String(n?.stable_id || '');
+    li.dataset.newsId = newsId;
     li.dataset.newsTitle = String(n?.display_title || n?.title || '');
 
     const content = document.createElement('div');
@@ -112,6 +113,19 @@ function _createNewsLi(n, idx, platformId) {
         content.appendChild(dateSpan);
     }
 
+    // Add favorite button
+    const favBtn = document.createElement('button');
+    favBtn.className = 'news-favorite-btn';
+    favBtn.dataset.newsId = newsId;
+    favBtn.title = '收藏';
+    favBtn.textContent = '☆';
+    favBtn.onclick = (e) => {
+        if (typeof window.handleFavoriteClick === 'function') {
+            window.handleFavoriteClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName);
+        }
+    };
+    content.appendChild(favBtn);
+
     li.appendChild(content);
 
     const meta = String(n?.meta || '').trim();
@@ -162,9 +176,13 @@ async function _hydrateLazyPlatformCard(card) {
         list.querySelectorAll('.news-placeholder').forEach((el) => el.remove());
         list.querySelectorAll('.news-item').forEach((el) => el.remove());
 
+        // Get platform name from card header
+        const platformNameEl = card.querySelector('.platform-name');
+        const platformName = platformNameEl ? platformNameEl.textContent.trim() : pid;
+
         const capped = items.slice(0, CATEGORY_PAGE_SIZE);
         for (let i = 0; i < capped.length; i++) {
-            list.appendChild(_createNewsLi(capped[i], i + 1, pid));
+            list.appendChild(_createNewsLi(capped[i], i + 1, pid, platformName));
         }
 
         const loadedCount = list.querySelectorAll('.news-item').length;
@@ -358,6 +376,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const safeHref = url || '#';
         const dateStr = formatNewsDate(n?.timestamp);
         const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
+        const favBtnHtml = `<button class="news-favorite-btn" data-news-id="${stableId}" onclick="handleFavoriteClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="收藏">☆</button>`;
         return `
             <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
@@ -368,6 +387,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
                         ${crossBadge}
                     </a>
                     ${dateHtml}
+                    ${favBtnHtml}
                 </div>
                 ${metaHtml}
             </li>`;
@@ -776,6 +796,7 @@ export const data = {
                         const safeHref = url || '#';
                         const dateStr = formatNewsDate(n?.timestamp);
                         const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
+                        const favBtnHtml = `<button class="news-favorite-btn" data-news-id="${stableId}" onclick="handleFavoriteClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="收藏">☆</button>`;
                         return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                             <div class="news-item-content">
@@ -786,6 +807,7 @@ export const data = {
                                     ${crossBadge}
                                 </a>
                                 ${dateHtml}
+                                ${favBtnHtml}
                             </div>
                             ${metaHtml}
                         </li>`;

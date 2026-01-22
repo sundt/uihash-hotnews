@@ -221,6 +221,9 @@ function createTagCard(tagData) {
             const dateStr = formatNewsDate(item.published_at);
             // Escape title for HTML attribute
             const safeTitle = (item.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escapedTitle = safeTitle.replace(/'/g, "\\'");
+            const escapedUrl = (item.url || '').replace(/'/g, "\\'");
+            const escapedTagName = (tagName || '').replace(/'/g, "\\'");
             return `
             <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}">
                 <div class="news-item-content">
@@ -229,6 +232,7 @@ function createTagCard(tagData) {
                         ${item.title}
                     </a>
                     ${dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${dateStr}</span>` : ''}
+                    <button class="news-favorite-btn" data-news-id="${item.id}" onclick="handleFavoriteClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="收藏">☆</button>
                 </div>
             </li>
             `;

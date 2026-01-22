@@ -286,8 +286,11 @@
                                     {% if news.timestamp %}
                                     <span class="tr-news-date"
                                         style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">{{
-                                        news.timestamp[:10] }}</span>
+                                        news.timestamp[5:10] }}</span>
                                     {% endif %}
+                                    <button class="news-favorite-btn" data-news-id="{{ news.stable_id }}"
+                                        onclick="handleFavoriteClick(event, '{{ news.stable_id }}', '{{ (news.display_title or news.title)|e }}', '{{ news.url|e }}', '{{ platform_id }}', '{{ platform.name|e }}')"
+                                        title="收藏">☆</button>
                                 </div>
                                 {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
                                     news.meta }}</div>{% endif %}

@@ -108,10 +108,11 @@ function cancelBulkLoadCategory() {
     }
 }
 
-function createNewsLi(n, idx, platformId, categoryId) {
+function createNewsLi(n, idx, platformId, categoryId, platformName) {
     const li = document.createElement('li');
     li.className = 'news-item';
-    li.dataset.newsId = String(n?.stable_id || '');
+    const newsId = String(n?.stable_id || '');
+    li.dataset.newsId = newsId;
     li.dataset.newsTitle = String(n?.display_title || n?.title || '');
 
     const content = document.createElement('div');
@@ -175,6 +176,19 @@ function createNewsLi(n, idx, platformId, categoryId) {
         dateSpan.textContent = dateStr;
         content.appendChild(dateSpan);
     }
+
+    // Add favorite button
+    const favBtn = document.createElement('button');
+    favBtn.className = 'news-favorite-btn';
+    favBtn.dataset.newsId = newsId;
+    favBtn.title = '收藏';
+    favBtn.textContent = '☆';
+    favBtn.onclick = (e) => {
+        if (typeof window.handleFavoriteClick === 'function') {
+            window.handleFavoriteClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName || '');
+        }
+    };
+    content.appendChild(favBtn);
 
     li.appendChild(content);
 
@@ -281,8 +295,11 @@ async function bulkLoadCategory(categoryId, opts = {}) {
 
         const p = byPid[pid] || {};
         const items = Array.isArray(p.items) ? p.items : [];
+        // Get platform name from card header
+        const platformNameEl = card.querySelector('.platform-name');
+        const platformName = platformNameEl ? platformNameEl.textContent.trim() : pid;
         for (let i = 0; i < items.length; i++) {
-            list.appendChild(createNewsLi(items[i], i + 1, pid, categoryId));
+            list.appendChild(createNewsLi(items[i], i + 1, pid, categoryId, platformName));
         }
 
         const loadedCount = list.querySelectorAll('.news-item').length;
@@ -487,10 +504,13 @@ async function fetchNextPage(card, neededTotal, opts = {}) {
         const hasMore = !!data?.has_more;
         if (!hasMore || (currentTotal + items.length) >= MAX_ITEMS_PER_PLATFORM) card.dataset.hasMore = '0';
 
+        // Get platform name from card header
+        const platformNameEl = card.querySelector('.platform-name');
+        const platformName = platformNameEl ? platformNameEl.textContent.trim() : pid;
         for (let i = 0; i < items.length; i++) {
             const n = items[i] || {};
             const idx = currentTotal + i + 1;
-            const li = createNewsLi(n, idx, pid, getActiveCategoryId());
+            const li = createNewsLi(n, idx, pid, getActiveCategoryId(), platformName);
             list.appendChild(li);
         }
 
