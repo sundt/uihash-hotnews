@@ -111,8 +111,11 @@ async function checkWechatAuthExpiration() {
         
         const data = await res.json();
         if (data.ok && data.show_warning) {
+            // Show red dot on settings button instead of banner
+            showSettingsWarningDot(true);
             return data;
         }
+        showSettingsWarningDot(false);
         return null;
     } catch (e) {
         console.error('[MyTags] WeChat auth check failed:', e);
@@ -121,50 +124,28 @@ async function checkWechatAuthExpiration() {
 }
 
 /**
- * Render WeChat auth expiration warning banner
+ * Show/hide red warning dot on settings button
+ */
+function showSettingsWarningDot(show) {
+    const badge = document.getElementById('categorySettingsNewBadge');
+    if (badge) {
+        if (show) {
+            badge.style.display = 'inline-block';
+            badge.style.background = '#ef4444';  // Red color for warning
+            badge.classList.add('wechat-warning-dot');
+        } else if (badge.classList.contains('wechat-warning-dot')) {
+            badge.style.display = 'none';
+            badge.classList.remove('wechat-warning-dot');
+        }
+    }
+}
+
+/**
+ * Render WeChat auth expiration warning banner (disabled - now using red dot)
  */
 function renderWechatWarningBanner(container, warningData) {
-    if (!warningData || !warningData.show_warning) return;
-    
-    const isExpired = warningData.warning_type === 'expired';
-    const bgColor = isExpired ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)';
-    const borderColor = isExpired ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
-    const textColor = isExpired ? '#dc2626' : '#d97706';
-    const icon = isExpired ? '⚠️' : '⏰';
-    
-    const bannerHtml = `
-        <div class="wechat-auth-warning" style="
-            background: ${bgColor};
-            border: 1px solid ${borderColor};
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        ">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:18px;">${icon}</span>
-                <span style="color:${textColor};font-size:14px;">${warningData.message}</span>
-            </div>
-            <a href="/api/user/preferences/page" 
-               style="
-                   padding: 6px 12px;
-                   background: ${isExpired ? '#dc2626' : '#d97706'};
-                   color: white;
-                   text-decoration: none;
-                   border-radius: 6px;
-                   font-size: 12px;
-                   white-space: nowrap;
-               ">
-                ${isExpired ? '重新配置' : '去更新'}
-            </a>
-        </div>
-    `;
-    
-    // Insert at the beginning of the container
-    container.insertAdjacentHTML('afterbegin', bannerHtml);
+    // No longer showing banner, using red dot on settings button instead
+    return;
 }
 
 /**
