@@ -7,8 +7,14 @@ import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 
 const FAVORITES_STORAGE_KEY = 'hotnews_favorites_v1';
+const FAVORITES_WIDTH_KEY = 'hotnews_favorites_width';
+const DEFAULT_PANEL_WIDTH = 500;
+const MIN_PANEL_WIDTH = 320;
+const MAX_PANEL_WIDTH = 800;
+
 let favoritesCache = null;
 let isPanelOpen = false;
+let isResizing = false;
 
 /**
  * Get favorites from local storage (for non-logged-in users or as cache)
@@ -326,6 +332,14 @@ async function loadFavoritesPanel() {
  * Toggle favorites panel visibility
  */
 function toggleFavoritesPanel() {
+    const user = authState.getUser();
+    
+    // If not logged in, show login modal instead of panel
+    if (!user) {
+        openLoginModal();
+        return;
+    }
+    
     const panel = document.getElementById('favoritesPanel');
     let overlay = document.getElementById('favoritesOverlay');
     
@@ -397,6 +411,14 @@ function handleFavoriteClick(event, newsId, title, url, sourceId, sourceName) {
     event.preventDefault();
     event.stopPropagation();
     
+    const user = authState.getUser();
+    
+    // If not logged in, show login modal
+    if (!user) {
+        openLoginModal();
+        return;
+    }
+    
     const button = event.currentTarget;
     const newsItem = {
         news_id: newsId,
@@ -407,6 +429,147 @@ function handleFavoriteClick(event, newsId, title, url, sourceId, sourceName) {
     };
     
     toggleFavorite(newsItem, button);
+}
+
+/**
+ * Get saved panel width from localStorage
+ */
+function getSavedPanelWidth() {
+    try {
+        const saved = localStorage.getItem(FAVORITES_WIDTH_KEY);
+        if (saved) {
+            const width = parseInt(saved, 10);
+            if (width >= MIN_PANEL_WIDTH && width <= MAX_PANEL_WIDTH) {
+                return width;
+            }
+        }
+    } catch (e) {}
+    return DEFAULT_PANEL_WIDTH;
+}
+
+/**
+ * Save panel width to localStorage
+ */
+function savePanelWidth(width) {
+    try {
+        localStorage.setItem(FAVORITES_WIDTH_KEY, String(width));
+    } catch (e) {}
+}
+
+/**
+ * Apply panel width
+ */
+function applyPanelWidth(width) {
+    const panel = document.getElementById('favoritesPanel');
+    if (panel) {
+        panel.style.width = width + 'px';
+    }
+}
+
+/**
+ * Initialize panel resize functionality
+ */
+function initPanelResize() {
+    const panel = document.getElementById('favoritesPanel');
+    const handle = document.getElementById('favoritesResizeHandle');
+    
+    if (!panel || !handle) return;
+    
+    // Apply saved width
+    const savedWidth = getSavedPanelWidth();
+    applyPanelWidth(savedWidth);
+    
+    let startX = 0;
+    let startWidth = 0;
+    
+    function onMouseDown(e) {
+        e.preventDefault();
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+        
+        panel.classList.add('resizing');
+        handle.classList.add('active');
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    function onMouseMove(e) {
+        if (!isResizing) return;
+        
+        // Dragging left increases width, dragging right decreases
+        const delta = startX - e.clientX;
+        let newWidth = startWidth + delta;
+        
+        // Clamp to min/max
+        newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newWidth));
+        
+        panel.style.width = newWidth + 'px';
+    }
+    
+    function onMouseUp() {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        panel.classList.remove('resizing');
+        handle.classList.remove('active');
+        
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        
+        // Save the new width
+        savePanelWidth(panel.offsetWidth);
+    }
+    
+    // Touch support
+    function onTouchStart(e) {
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        isResizing = true;
+        startX = e.touches[0].clientX;
+        startWidth = panel.offsetWidth;
+        
+        panel.classList.add('resizing');
+        handle.classList.add('active');
+        
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
+    }
+    
+    function onTouchMove(e) {
+        if (!isResizing || e.touches.length !== 1) return;
+        e.preventDefault();
+        
+        const delta = startX - e.touches[0].clientX;
+        let newWidth = startWidth + delta;
+        newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newWidth));
+        
+        panel.style.width = newWidth + 'px';
+    }
+    
+    function onTouchEnd() {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        panel.classList.remove('resizing');
+        handle.classList.remove('active');
+        
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+        
+        savePanelWidth(panel.offsetWidth);
+    }
+    
+    handle.addEventListener('mousedown', onMouseDown);
+    handle.addEventListener('touchstart', onTouchStart, { passive: false });
+}
+
+// Initialize resize on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPanelResize);
+} else {
+    initPanelResize();
 }
 
 // Expose to window

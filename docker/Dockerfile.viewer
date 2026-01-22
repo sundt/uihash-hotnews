@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/requirements.viewer.txt ./requirements.viewer.txt
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --retries 3 --timeout 60 -r requirements.viewer.txt
+RUN pip install --no-cache-dir --retries 3 --timeout 60 -r requirements.viewer.txt
 
 COPY hotnews/ ./hotnews/
 COPY mcp_server/ ./mcp_server/
