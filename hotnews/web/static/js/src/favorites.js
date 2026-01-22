@@ -225,10 +225,28 @@ function renderFavoritesList(favorites) {
                             ${f.created_at ? `<span>收藏于 ${formatFavoriteDate(f.created_at)}</span>` : ''}
                         </span>
                         <div class="favorite-item-actions">
+                            <button class="favorite-summary-btn${f.summary ? ' has-summary' : ''}" 
+                                    onclick="handleSummaryClick('${f.news_id}')" 
+                                    title="${f.summary ? '查看总结' : 'AI 总结'}">
+                                ${f.summary ? '📄' : '📝'}
+                            </button>
                             <button class="favorite-remove-btn" onclick="removeFavoriteFromPanel('${f.news_id}')" title="取消收藏">
                                 删除
                             </button>
                         </div>
+                    </div>
+                    <div class="favorite-item-summary" id="summary-${f.news_id}" style="display:${f.summary ? 'block' : 'none'};">
+                        <div class="summary-content">${f.summary ? renderMarkdown(f.summary) : ''}</div>
+                        ${f.summary ? `
+                            <div class="summary-actions">
+                                <button class="summary-regenerate-btn" onclick="regenerateSummary('${f.news_id}')" title="重新生成">
+                                    🔄 重新生成
+                                </button>
+                                <button class="summary-toggle-btn" onclick="toggleSummaryDisplay('${f.news_id}')">
+                                    收起
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `).join('')}
@@ -572,12 +590,195 @@ if (document.readyState === 'loading') {
     initPanelResize();
 }
 
+/**
+ * Simple markdown renderer for summaries
+ */
+function renderMarkdown(text) {
+    if (!text) return '';
+    
+    // Escape HTML first
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    
+    // Bold
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    
+    // Links
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Lists
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+    
+    // Wrap consecutive li in ul
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    
+    // Paragraphs (double newline)
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = '<p>' + html + '</p>';
+    
+    // Clean up empty paragraphs
+    html = html.replace(/<p>\s*<\/p>/g, '');
+    html = html.replace(/<p>(<h[234]>)/g, '$1');
+    html = html.replace(/(<\/h[234]>)<\/p>/g, '$1');
+    html = html.replace(/<p>(<ul>)/g, '$1');
+    html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+    
+    return html;
+}
+
+/**
+ * Handle summary button click
+ */
+async function handleSummaryClick(newsId) {
+    const summaryDiv = document.getElementById(`summary-${newsId}`);
+    const btn = document.querySelector(`.favorite-item[data-news-id="${newsId}"] .favorite-summary-btn`);
+    
+    if (!summaryDiv || !btn) return;
+    
+    // If already has summary, toggle display
+    if (btn.classList.contains('has-summary')) {
+        toggleSummaryDisplay(newsId);
+        return;
+    }
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    btn.title = '生成中...';
+    
+    summaryDiv.style.display = 'block';
+    summaryDiv.innerHTML = `
+        <div class="summary-loading">
+            <div class="summary-loading-spinner"></div>
+            <span>正在生成 AI 总结...</span>
+        </div>
+    `;
+    
+    try {
+        const res = await fetch(`/api/user/favorites/${encodeURIComponent(newsId)}/summary`, {
+            method: 'POST'
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.detail || '生成失败');
+        }
+        
+        if (data.ok && data.summary) {
+            btn.classList.add('has-summary');
+            btn.textContent = '📄';
+            btn.title = '查看总结';
+            
+            summaryDiv.innerHTML = `
+                <div class="summary-content">${renderMarkdown(data.summary)}</div>
+                <div class="summary-actions">
+                    <button class="summary-regenerate-btn" onclick="regenerateSummary('${newsId}')" title="重新生成">
+                        🔄 重新生成
+                    </button>
+                    <button class="summary-toggle-btn" onclick="toggleSummaryDisplay('${newsId}')">
+                        收起
+                    </button>
+                </div>
+            `;
+            
+            // Update cache
+            if (favoritesCache) {
+                const fav = favoritesCache.find(f => f.news_id === newsId);
+                if (fav) {
+                    fav.summary = data.summary;
+                    fav.summary_at = data.summary_at;
+                }
+            }
+        } else {
+            throw new Error(data.error || '生成失败');
+        }
+    } catch (e) {
+        console.error('[Favorites] Summary error:', e);
+        summaryDiv.innerHTML = `
+            <div class="summary-error">
+                <span>❌ ${e.message}</span>
+                <button onclick="handleSummaryClick('${newsId}')" style="margin-left:8px;">重试</button>
+            </div>
+        `;
+        btn.textContent = '📝';
+        btn.title = 'AI 总结';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/**
+ * Toggle summary display
+ */
+function toggleSummaryDisplay(newsId) {
+    const summaryDiv = document.getElementById(`summary-${newsId}`);
+    if (!summaryDiv) return;
+    
+    const isVisible = summaryDiv.style.display !== 'none';
+    summaryDiv.style.display = isVisible ? 'none' : 'block';
+    
+    // Update toggle button text
+    const toggleBtn = summaryDiv.querySelector('.summary-toggle-btn');
+    if (toggleBtn) {
+        toggleBtn.textContent = isVisible ? '展开' : '收起';
+    }
+}
+
+/**
+ * Regenerate summary (delete cache and regenerate)
+ */
+async function regenerateSummary(newsId) {
+    const summaryDiv = document.getElementById(`summary-${newsId}`);
+    const btn = document.querySelector(`.favorite-item[data-news-id="${newsId}"] .favorite-summary-btn`);
+    
+    if (!summaryDiv) return;
+    
+    // Delete cached summary first
+    try {
+        await fetch(`/api/user/favorites/${encodeURIComponent(newsId)}/summary`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        console.error('[Favorites] Delete summary error:', e);
+    }
+    
+    // Reset button state
+    if (btn) {
+        btn.classList.remove('has-summary');
+        btn.textContent = '📝';
+    }
+    
+    // Update cache
+    if (favoritesCache) {
+        const fav = favoritesCache.find(f => f.news_id === newsId);
+        if (fav) {
+            fav.summary = null;
+            fav.summary_at = null;
+        }
+    }
+    
+    // Regenerate
+    await handleSummaryClick(newsId);
+}
+
 // Expose to window
 window.toggleFavoritesPanel = toggleFavoritesPanel;
 window.closeFavoritesPanel = closeFavoritesPanel;
 window.removeFavoriteFromPanel = removeFavoriteFromPanel;
 window.handleFavoriteClick = handleFavoriteClick;
 window.isFavorited = isFavorited;
+window.handleSummaryClick = handleSummaryClick;
+window.toggleSummaryDisplay = toggleSummaryDisplay;
+window.regenerateSummary = regenerateSummary;
 
 export {
     toggleFavoritesPanel,
