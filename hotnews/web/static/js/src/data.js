@@ -376,7 +376,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const safeHref = url || '#';
         const dateStr = formatNewsDate(n?.timestamp);
         const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
-        const favBtnHtml = `<button class="news-favorite-btn" data-news-id="${stableId}" onclick="handleFavoriteClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="收藏">☆</button>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 总结">📝</button>`;
         return `
             <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
@@ -387,7 +387,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
                         ${crossBadge}
                     </a>
                     ${dateHtml}
-                    ${favBtnHtml}
+                    ${summaryBtnHtml}
                 </div>
                 ${metaHtml}
             </li>`;
@@ -796,7 +796,7 @@ export const data = {
                         const safeHref = url || '#';
                         const dateStr = formatNewsDate(n?.timestamp);
                         const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
-                        const favBtnHtml = `<button class="news-favorite-btn" data-news-id="${stableId}" onclick="handleFavoriteClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="收藏">☆</button>`;
+                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 总结">📝</button>`;
                         return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                             <div class="news-item-content">
@@ -807,7 +807,7 @@ export const data = {
                                     ${crossBadge}
                                 </a>
                                 ${dateHtml}
-                                ${favBtnHtml}
+                                ${summaryBtnHtml}
                             </div>
                             ${metaHtml}
                         </li>`;

@@ -177,18 +177,22 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
         content.appendChild(dateSpan);
     }
 
-    // Add favorite button
-    const favBtn = document.createElement('button');
-    favBtn.className = 'news-favorite-btn';
-    favBtn.dataset.newsId = newsId;
-    favBtn.title = '收藏';
-    favBtn.textContent = '☆';
-    favBtn.onclick = (e) => {
-        if (typeof window.handleFavoriteClick === 'function') {
-            window.handleFavoriteClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName || '');
+    // Add summary button
+    const summaryBtn = document.createElement('button');
+    summaryBtn.className = 'news-summary-btn';
+    summaryBtn.dataset.newsId = newsId;
+    summaryBtn.dataset.title = String(n?.display_title || n?.title || '');
+    summaryBtn.dataset.url = String(n?.url || '');
+    summaryBtn.dataset.sourceId = platformId;
+    summaryBtn.dataset.sourceName = platformName || '';
+    summaryBtn.title = 'AI 总结';
+    summaryBtn.textContent = '📝';
+    summaryBtn.onclick = (e) => {
+        if (typeof window.handleSummaryClick === 'function') {
+            window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName || '');
         }
     };
-    content.appendChild(favBtn);
+    content.appendChild(summaryBtn);
 
     li.appendChild(content);
 

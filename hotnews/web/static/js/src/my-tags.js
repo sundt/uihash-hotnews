@@ -232,7 +232,7 @@ function createTagCard(tagData) {
                         ${item.title}
                     </a>
                     ${dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${dateStr}</span>` : ''}
-                    <button class="news-favorite-btn" data-news-id="${item.id}" onclick="handleFavoriteClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="收藏">☆</button>
+                    <button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="AI 总结">📝</button>
                 </div>
             </li>
             `;
