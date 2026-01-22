@@ -79,6 +79,16 @@ window.openLink = (el) => link.openLink(el);
 
 // 全局事件监听
 document.addEventListener('click', (e) => {
+    // 事件委托：处理所有 .news-title 的点击，确保已读状态统一
+    const titleEl = e.target.closest('.news-title');
+    if (titleEl) {
+        // 检查是否已有 onclick 处理器（避免重复处理）
+        if (!titleEl.hasAttribute('onclick')) {
+            link.handleTitleClickV2(titleEl, e);
+        }
+        return;
+    }
+    
     if (e.target.closest('.news-item')) return;
     link.closeAllPreviews(null);
 });

@@ -219,8 +219,10 @@ function createTagCard(tagData) {
         ? news.map((item, idx) => {
             // Format date using the imported function
             const dateStr = formatNewsDate(item.published_at);
+            // Escape title for HTML attribute
+            const safeTitle = (item.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             return `
-            <li class="news-item" data-news-id="${item.id}">
+            <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}">
                 <div class="news-item-content">
                     <span class="news-index">${idx + 1}</span>
                     <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer">
@@ -271,6 +273,11 @@ function renderTagsNews(container, tagsData) {
     console.log('[MyTags] Generated HTML length:', cardsHtml.length);
     container.innerHTML = cardsHtml;
     console.log('[MyTags] HTML inserted into container');
+    
+    // Restore read state for the newly rendered items
+    if (window.TR && window.TR.readState) {
+        window.TR.readState.restoreReadState();
+    }
 }
 
 /**

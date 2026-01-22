@@ -93,7 +93,6 @@ export function formatNewsDate(ts) {
             
             const d = new Date(ms);
             if (!isNaN(d.getTime())) {
-                const YYYY = String(d.getFullYear());
                 const MM = String(d.getMonth() + 1).padStart(2, '0');
                 const DD = String(d.getDate()).padStart(2, '0');
                 
@@ -103,7 +102,7 @@ export function formatNewsDate(ts) {
                     return '';
                 }
                 
-                return `${YYYY}-${MM}-${DD}`;
+                return `${MM}-${DD}`;
             }
         }
         
@@ -126,7 +125,7 @@ export function formatNewsDate(ts) {
                 return '';
             }
             
-            return `${m[1]}-${m[2]}-${m[3]}`;
+            return `${m[2]}-${m[3]}`;
         }
     } catch (e) {
         // ignore
